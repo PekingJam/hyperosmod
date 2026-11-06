@@ -75,7 +75,47 @@ jobs:
           path: artifacts
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/*.apk
           generate_release_notes: true
+
+  release-main:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout for rolling tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Move rolling tag
+        run: |
+          git tag -f main-latest "$GITHUB_SHA"
+          git push -f origin "refs/tags/main-latest"
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: HyperOSMod
+          path: artifacts
+
+      - name: Publish/update rolling main release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: main-latest
+          target_commitish: ${{ github.sha }}
+          name: Latest main build
+          body: |
+            Automatic build from the main branch.
+
+            - Commit: `${{ github.sha }}`
+            - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          prerelease: true
+          make_latest: 'false'
+          files: artifacts/*.apk
+          overwrite_files: true
+          fail_on_unmatched_files: true
