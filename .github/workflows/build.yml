@@ -74,10 +74,13 @@ jobs:
           name: HyperOSMod
           path: artifacts
 
+      - name: Rename APK
+        run: mv artifacts/app-release.apk "artifacts/HyperOSMod-${GITHUB_REF_NAME}.apk"
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          files: artifacts/*.apk
+          files: artifacts/HyperOSMod-*.apk
           generate_release_notes: true
 
   release-main:
@@ -103,6 +106,9 @@ jobs:
           name: HyperOSMod
           path: artifacts
 
+      - name: Rename APK
+        run: mv artifacts/app-release.apk artifacts/HyperOSMod-main.apk
+
       - name: Publish/update rolling main release
         uses: softprops/action-gh-release@v3
         with:
@@ -116,6 +122,6 @@ jobs:
             - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           prerelease: true
           make_latest: 'false'
-          files: artifacts/*.apk
+          files: artifacts/HyperOSMod-main.apk
           overwrite_files: true
           fail_on_unmatched_files: true

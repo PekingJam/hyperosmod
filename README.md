@@ -100,7 +100,7 @@ com.xiaomi.wearable
 3. 构建 Release APK 并上传为 artifact；
 4. 运行 Robolectric 布局冒烟测试；
 5. **Push 到 `main` / `master` 时，自动创建或更新滚动预发布 `main-latest`，APK 会作为 Release 资产上传**；
-6. 推送 `v*` tag 时自动创建带版本号的 GitHub Release。
+6. 推送 `v*` tag 时自动创建带版本号的 GitHub Release。\n\nRelease 资产名：主分支滚动构建为 `HyperOSMod-main.apk`，tag 构建为 `HyperOSMod-<tag>.apk`。
 
 可选 Secrets（不配置则使用 debug 签名）：
 
@@ -167,4 +167,5 @@ Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `Fit
 锁屏通知限制、解锁后保留通知、自定义主题色的实现思路来自 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)；勿扰同步实现参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)。两者均为 AGPL-3.0。本仓库同样以 **AGPL-3.0** 发布，详见 [LICENSE](LICENSE) 与 [NOTICE.md](NOTICE.md)。
 
 本项目与小米、HyperOS、LSPosed 官方无隶属关系。使用风险自负。
+
 
