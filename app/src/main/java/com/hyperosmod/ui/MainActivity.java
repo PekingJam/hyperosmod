@@ -46,6 +46,7 @@ public final class MainActivity extends AppCompatActivity {
         bindThemeRows();
         bindUpdateRows();
         bindDndRows();
+        bindTelephonyRows();
 
         binding.footer.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
         binding.buttonRestart.setOnClickListener(v -> restartSystemUi());
@@ -147,6 +148,31 @@ public final class MainActivity extends AppCompatActivity {
         binding.dndHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
     }
 
+    private void bindTelephonyRows() {
+        bindSwitch(binding.rowTelephonyEnabled, Keys.TELEPHONY_ENABLED,
+                R.string.telephony_enabled_title, R.string.telephony_enabled_summary);
+        binding.rowTelephonyTargets.title.setText(R.string.telephony_targets_title);
+        binding.rowTelephonyTargets.getRoot().setOnClickListener(v -> {
+            Intent intent = new Intent(this, BlockedAppsActivity.class);
+            intent.putExtra(BlockedAppsActivity.EXTRA_MODE,
+                    BlockedAppsActivity.MODE_TELEPHONY_TARGETS);
+            startActivity(intent);
+        });
+        binding.rowTelephonyEdit.title.setText(R.string.telephony_edit_title);
+        binding.rowTelephonyEdit.getRoot().setOnClickListener(v ->
+                startActivity(new Intent(this, TelephonySettingsActivity.class)));
+    }
+
+    private void updateTelephonyRows() {
+        boolean enabled = Prefs.getBoolean(Keys.TELEPHONY_ENABLED, false);
+        Set<String> targets = Prefs.getStringSet(Keys.TELEPHONY_TARGETS);
+        binding.rowTelephonyTargets.summary.setText(targets.isEmpty()
+                ? getString(R.string.telephony_targets_summary_zero)
+                : getString(R.string.telephony_targets_summary, targets.size()));
+        binding.rowTelephonyEdit.summary.setText(R.string.telephony_edit_summary);
+        binding.telephonyHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
+    }
+
     private void checkPermissions() {
         if (!PermissionHelper.hasAppListAccess(this)) {
             if (!appListPromptShown) {
@@ -205,10 +231,13 @@ public final class MainActivity extends AppCompatActivity {
                 Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false));
         binding.rowBlockUpdates.switchView.setChecked(
                 Prefs.getBoolean(Keys.BLOCK_UPDATES_ENABLED, false));
+        binding.rowTelephonyEnabled.switchView.setChecked(
+                Prefs.getBoolean(Keys.TELEPHONY_ENABLED, false));
 
         updateThemeRow();
         updateBlockedAppsRow();
         updateDndRow();
+        updateTelephonyRows();
         refreshStatus();
     }
 

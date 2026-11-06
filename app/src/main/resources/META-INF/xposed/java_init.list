@@ -1,1 +1,2 @@
 com.hyperosmod.xposed.ModuleEntry
+io.github.howard20181.hyperpasskey.PasskeyHook

@@ -1,6 +1,7 @@
 # Keep the libxposed entry point readable: it is resolved from META-INF/xposed/java_init.list.
 -keep class com.hyperosmod.xposed.ModuleEntry { *; }
 -keep class com.hyperosmod.xposed.** { *; }
+-keep class io.github.howard20181.hyperpasskey.** { *; }
 
 # The framework provides these classes at runtime.
 -dontwarn io.github.libxposed.**
@@ -13,3 +14,4 @@
 -keepclassmembers class **.R$* {
     public static <fields>;
 }
+

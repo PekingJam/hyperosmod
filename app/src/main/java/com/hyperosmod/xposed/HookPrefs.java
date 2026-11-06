@@ -59,6 +59,18 @@ final class HookPrefs {
         }
     }
 
+    static String getString(String key, String def) {
+        SharedPreferences p = prefs;
+        if (p == null) {
+            return def;
+        }
+        try {
+            return p.getString(key, def);
+        } catch (Throwable t) {
+            return def;
+        }
+    }
+
     static Set<String> getStringSet(String key) {
         SharedPreferences p = prefs;
         if (p == null) {

@@ -269,6 +269,65 @@
                 android:layout_marginStart="4dp"
                 android:layout_marginTop="24dp"
                 android:layout_marginBottom="8dp"
+                android:text="@string/section_telephony"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:textColor="?attr/colorPrimary" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Material3.CardView.Filled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <include
+                        android:id="@+id/row_telephony_enabled"
+                        layout="@layout/row_switch" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="18dp"
+                        android:background="?attr/colorOutlineVariant" />
+
+                    <include
+                        android:id="@+id/row_telephony_targets"
+                        layout="@layout/row_apps" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="18dp"
+                        android:background="?attr/colorOutlineVariant" />
+
+                    <include
+                        android:id="@+id/row_telephony_edit"
+                        layout="@layout/row_apps" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/telephony_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/telephony_scope_hint"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="8dp"
                 android:text="@string/section_tools"
                 android:textAppearance="?attr/textAppearanceTitleSmall"
                 android:textColor="?attr/colorPrimary" />

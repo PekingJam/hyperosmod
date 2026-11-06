@@ -15,8 +15,12 @@ android {
         applicationId = "com.hyperosmod"
         minSdk = 34
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.2.0"
+
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildFeatures {
@@ -45,8 +49,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -99,6 +103,10 @@ dependencies {
     // Used by the manager app to obtain the remote SharedPreferences bridge.
     implementation("io.github.libxposed:service:102.0.0")
 
+    // HyperPasskey integration (DexKit locates obfuscated Settings/SecurityCenter methods).
+    compileOnly(project(":hiddenapi-stubs"))
+    implementation("org.luckypray:dexkit:2.2.0")
+
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("com.google.android.material:material:1.12.0")
@@ -116,3 +124,4 @@ val copyRobolectricDeps = tasks.register<Copy>("copyRobolectricDeps") {
 tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
     dependsOn(copyRobolectricDeps)
 }
+

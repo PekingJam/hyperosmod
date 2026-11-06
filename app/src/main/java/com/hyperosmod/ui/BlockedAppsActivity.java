@@ -28,14 +28,20 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Lets the user choose the packages whose updates must be rejected. */
+/** Lets the user choose packages for update protection or telephony spoofing. */
 public final class BlockedAppsActivity extends AppCompatActivity {
+    public static final String EXTRA_MODE = "mode";
+    public static final int MODE_BLOCK_UPDATES = 0;
+    public static final int MODE_TELEPHONY_TARGETS = 1;
+
     private ActivityBlockedAppsBinding binding;
     private AppListAdapter adapter;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private Set<String> selectedPackages = new HashSet<>();
     private boolean permissionMissing;
     private boolean permissionDialogShown;
+    private int mode;
+    private String storeKey;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,13 +50,19 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         UiUtils.applySystemBars(this);
 
+        mode = getIntent().getIntExtra(EXTRA_MODE, MODE_BLOCK_UPDATES);
+        storeKey = mode == MODE_TELEPHONY_TARGETS
+                ? Keys.TELEPHONY_TARGETS : Keys.BLOCKED_PACKAGES;
+
         setSupportActionBar(binding.toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
+        binding.toolbar.setTitle(mode == MODE_TELEPHONY_TARGETS
+                ? R.string.telephony_targets_picker_title : R.string.app_picker_title);
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        selectedPackages = Prefs.getStringSet(Keys.BLOCKED_PACKAGES);
+        selectedPackages = Prefs.getStringSet(storeKey);
         adapter = new AppListAdapter(selectedPackages, this::onSelectionChanged);
         binding.appList.setLayoutManager(new LinearLayoutManager(this));
         binding.appList.setAdapter(adapter);
@@ -85,7 +97,7 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         });
 
         binding.clearAll.setOnClickListener(v -> confirmClearAll());
-        binding.selectedCount.setText(getString(R.string.selected_count, adapter.selectedCount()));
+        binding.selectedCount.setText(getString(countStringRes(), adapter.selectedCount()));
 
         permissionMissing = !PermissionHelper.hasAppListAccess(this);
         if (permissionMissing) {
@@ -193,10 +205,15 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         return entries;
     }
 
+    private int countStringRes() {
+        return mode == MODE_TELEPHONY_TARGETS
+                ? R.string.selected_targets_count : R.string.selected_count;
+    }
+
     private void onSelectionChanged(Set<String> selected) {
         selectedPackages = new HashSet<>(selected);
-        Prefs.setStringSet(Keys.BLOCKED_PACKAGES, selected);
-        binding.selectedCount.setText(getString(R.string.selected_count, selected.size()));
+        Prefs.setStringSet(storeKey, selected);
+        binding.selectedCount.setText(getString(countStringRes(), selected.size()));
     }
 
     private void updateEmptyState() {
@@ -218,3 +235,4 @@ public final class BlockedAppsActivity extends AppCompatActivity {
                 .show();
     }
 }
+

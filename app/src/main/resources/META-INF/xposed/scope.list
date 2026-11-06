@@ -2,3 +2,6 @@ system
 com.android.systemui
 com.mi.health
 com.xiaomi.wearable
+com.android.settings
+com.miui.securitycenter
+com.xiaomi.scanner

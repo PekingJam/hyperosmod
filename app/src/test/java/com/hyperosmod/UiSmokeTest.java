@@ -8,6 +8,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.hyperosmod.ui.BlockedAppsActivity;
 import com.hyperosmod.ui.ColorPickerDialog;
 import com.hyperosmod.ui.MainActivity;
+import com.hyperosmod.ui.TelephonyPreset;
+import com.hyperosmod.ui.TelephonySettingsActivity;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,6 +38,15 @@ public class UiSmokeTest {
                 .setup()
                 .get();
         assertNotNull(activity);
+    }
+
+    @Test
+    public void telephonySettingsInflates() {
+        AppCompatActivity activity = Robolectric.buildActivity(TelephonySettingsActivity.class)
+                .setup()
+                .get();
+        assertNotNull(activity);
+        assertEquals(5, TelephonyPreset.PRESETS.size());
     }
 
     @Test

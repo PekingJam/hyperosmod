@@ -32,5 +32,11 @@
             android:exported="false"
             android:parentActivityName=".ui.MainActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.TelephonySettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>

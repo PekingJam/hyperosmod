@@ -27,6 +27,27 @@ public final class Keys {
     /** Mi Fitness: restore the band &lt;-&gt; phone DND/zen-mode sync removed on Android 15+. */
     public static final String RESTORE_DND_SYNC = "restore_dnd_sync";
 
+    /** Telephony/SIM spoofing for selected apps. */
+    public static final String TELEPHONY_ENABLED = "telephony_enabled";
+    /** Set&lt;String&gt; of packages that should receive the spoofed telephony values. */
+    public static final String TELEPHONY_TARGETS = "telephony_targets";
+    public static final String TELEPHONY_DEFAULT_SLOT = "telephony_default_slot";
+    public static final String TELEPHONY_PRESET = "telephony_preset";
+
+    public static final String TELEPHONY_PHONE = "phone";
+    public static final String TELEPHONY_SIM_SERIAL = "sim_serial";
+    public static final String TELEPHONY_NETWORK_COUNTRY = "network_country";
+    public static final String TELEPHONY_NETWORK_OPERATOR = "network_operator";
+    public static final String TELEPHONY_NETWORK_OPERATOR_NAME = "network_operator_name";
+    public static final String TELEPHONY_SIM_COUNTRY = "sim_country";
+    public static final String TELEPHONY_SIM_OPERATOR = "sim_operator";
+    public static final String TELEPHONY_SIM_OPERATOR_NAME = "sim_operator_name";
+
+    /** Preference key for one telephony field of SIM slot 0 or 1. */
+    public static String telephony(String field, int slot) {
+        return "telephony_" + field + "_" + slot;
+    }
+
     /** Material-ish indigo used when the user enables the color override without picking one. */
     public static final int DEFAULT_THEME_COLOR = 0xFF4C6FFF;
 

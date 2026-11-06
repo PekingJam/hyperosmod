@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "HyperOSMod"
 include(":app")
+include(":hiddenapi-stubs")

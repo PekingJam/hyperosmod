@@ -24,3 +24,6 @@ Thumbs.db
 # Reference checkouts and local toolchains used during development
 _ref/
 _tools/
+
+# Kotlin/Gradle local state
+.kotlin/

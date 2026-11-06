@@ -52,5 +52,14 @@ public final class ModuleEntry extends XposedModule {
                 Logs.e("Failed to install Mi Fitness DND hooks", t);
             }
         }
+        if (HookPrefs.getBoolean(com.hyperosmod.Keys.TELEPHONY_ENABLED, false)
+                && HookPrefs.getStringSet(com.hyperosmod.Keys.TELEPHONY_TARGETS)
+                .contains(packageName)) {
+            try {
+                new TelephonyHooks(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install telephony hooks", t);
+            }
+        }
     }
 }

@@ -144,6 +144,14 @@ public final class Prefs {
         write(key, value);
     }
 
+    public static String getString(String key, String def) {
+        return local().getString(key, def);
+    }
+
+    public static void setString(String key, String value) {
+        write(key, value);
+    }
+
     public static Set<String> getStringSet(String key) {
         Set<String> stored = local().getStringSet(key, Collections.emptySet());
         return stored == null ? new LinkedHashSet<>() : new LinkedHashSet<>(stored);

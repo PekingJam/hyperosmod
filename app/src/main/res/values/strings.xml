@@ -15,6 +15,7 @@
     <string name="section_theme">系统界面 · 主题</string>
     <string name="section_updates">应用更新保护</string>
     <string name="section_mifitness">小米运动健康</string>
+    <string name="section_telephony">电话 / SIM 信息</string>
     <string name="section_tools">工具</string>
 
     <string name="unlock_notification_title">解除通知限制</string>
@@ -41,6 +42,35 @@
     <string name="dnd_permission_missing">未授权，点击前往系统设置为「小米运动健康」授予勿扰访问权限</string>
     <string name="dnd_permission_not_installed">未安装小米运动健康</string>
     <string name="dnd_permission_hint">勿扰访问权限由系统校验，模块无法代授；若小米运动健康已开启「通知访问权限」，系统会强制启用勿扰访问。</string>
+
+    <string name="telephony_enabled_title">启用电话 / SIM 伪装</string>
+    <string name="telephony_enabled_summary">对选定应用返回自定义号码、SIM 与运营商信息</string>
+    <string name="telephony_targets_title">目标应用</string>
+    <string name="telephony_targets_summary_zero">尚未选择目标应用</string>
+    <string name="telephony_targets_summary">已选择 %1$d 个目标应用</string>
+    <string name="telephony_edit_title">编辑伪装信息</string>
+    <string name="telephony_edit_summary">SIM 1 / SIM 2 · 美国 / 新加坡 / 香港 / 台湾 / 日本模板</string>
+    <string name="telephony_settings_title">电话 / SIM 伪装</string>
+    <string name="telephony_preset">地区模板</string>
+    <string name="telephony_preset_hint">选择模板会同时填充 SIM 1 和 SIM 2，可继续手动修改。</string>
+    <string name="telephony_default_slot">默认使用哪张卡</string>
+    <string name="telephony_slot_1">SIM 1</string>
+    <string name="telephony_slot_2">SIM 2</string>
+    <string name="telephony_sim_title">SIM %1$d</string>
+    <string name="telephony_field_phone">电话号码</string>
+    <string name="telephony_field_sim_serial">SIM 序列号</string>
+    <string name="telephony_field_network_country">网络国家码</string>
+    <string name="telephony_field_network_operator">网络运营商（MCC+MNC）</string>
+    <string name="telephony_field_network_operator_name">网络运营商名称</string>
+    <string name="telephony_field_sim_country">SIM 国家码</string>
+    <string name="telephony_field_sim_operator">SIM 运营商（MCC+MNC）</string>
+    <string name="telephony_field_sim_operator_name">SIM 运营商名称</string>
+    <string name="telephony_copy_to_second">复制 SIM 1 到 SIM 2</string>
+    <string name="save">保存</string>
+    <string name="saved">已保存</string>
+    <string name="telephony_scope_hint">提示：模块已改为手动作用域。请在 LSPosed 中勾选本模块，并勾选目标应用；只选目标应用即可，不必勾选全部应用。</string>
+    <string name="telephony_targets_picker_title">选择伪装目标应用</string>
+    <string name="selected_targets_count">已选择 %1$d 个应用</string>
 
     <string name="app_list_permission_title">需要应用列表权限</string>
     <string name="app_list_permission_message">选择要保护的应用需要读取已安装应用列表。请在系统设置中允许 HyperOS Mod 获取应用列表，然后返回本页。</string>
@@ -75,8 +105,9 @@
     <string name="filter_system">系统应用</string>
     <string name="empty_apps">没有匹配的应用</string>
     <string name="clear_all">清除全部</string>
-    <string name="clear_all_confirm">要取消保护所有应用吗？</string>
+    <string name="clear_all_confirm">要清除所有选择吗？</string>
     <string name="selected_count">已保护 %1$d 个应用</string>
     <string name="system_app_badge">系统</string>
     <string name="loading_apps">正在加载应用列表…</string>
 </resources>
+
