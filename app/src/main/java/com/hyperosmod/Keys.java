@@ -24,6 +24,9 @@ public final class Keys {
     /** Set&lt;String&gt; of package names whose updates must be rejected. */
     public static final String BLOCKED_PACKAGES = "blocked_packages";
 
+    /** Mi Fitness: restore the band &lt;-&gt; phone DND/zen-mode sync removed on Android 15+. */
+    public static final String RESTORE_DND_SYNC = "restore_dnd_sync";
+
     /** Material-ish indigo used when the user enables the color override without picking one. */
     public static final int DEFAULT_THEME_COLOR = 0xFF4C6FFF;
 

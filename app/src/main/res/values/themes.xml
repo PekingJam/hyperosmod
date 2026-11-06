@@ -3,6 +3,8 @@
     <style name="Theme.HyperOSMod" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
     <style name="Widget.HyperOSMod.Toolbar" parent="Widget.Material3.Toolbar">

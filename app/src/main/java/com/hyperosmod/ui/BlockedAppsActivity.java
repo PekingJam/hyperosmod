@@ -21,6 +21,7 @@ import com.hyperosmod.databinding.ActivityBlockedAppsBinding;
 
 import java.text.Collator;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -32,12 +33,16 @@ public final class BlockedAppsActivity extends AppCompatActivity {
     private ActivityBlockedAppsBinding binding;
     private AppListAdapter adapter;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private Set<String> selectedPackages = new HashSet<>();
+    private boolean permissionMissing;
+    private boolean permissionDialogShown;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityBlockedAppsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        UiUtils.applySystemBars(this);
 
         setSupportActionBar(binding.toolbar);
         if (getSupportActionBar() != null) {
@@ -45,7 +50,8 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         }
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        adapter = new AppListAdapter(Prefs.getStringSet(Keys.BLOCKED_PACKAGES), this::onSelectionChanged);
+        selectedPackages = Prefs.getStringSet(Keys.BLOCKED_PACKAGES);
+        adapter = new AppListAdapter(selectedPackages, this::onSelectionChanged);
         binding.appList.setLayoutManager(new LinearLayoutManager(this));
         binding.appList.setAdapter(adapter);
         binding.appList.addItemDecoration(
@@ -81,7 +87,40 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         binding.clearAll.setOnClickListener(v -> confirmClearAll());
         binding.selectedCount.setText(getString(R.string.selected_count, adapter.selectedCount()));
 
-        loadApps();
+        permissionMissing = !PermissionHelper.hasAppListAccess(this);
+        if (permissionMissing) {
+            showPermissionDialog();
+            binding.loading.setVisibility(View.GONE);
+            binding.empty.setText(R.string.app_list_permission_message);
+            binding.empty.setVisibility(View.VISIBLE);
+        } else {
+            loadApps();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        UiUtils.applySystemBars(this);
+        if (permissionMissing && PermissionHelper.hasAppListAccess(this)) {
+            permissionMissing = false;
+            binding.empty.setText(R.string.empty_apps);
+            loadApps();
+        }
+    }
+
+    private void showPermissionDialog() {
+        if (permissionDialogShown) {
+            return;
+        }
+        permissionDialogShown = true;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.app_list_permission_title)
+                .setMessage(R.string.app_list_permission_message)
+                .setNegativeButton(R.string.later, null)
+                .setPositiveButton(R.string.grant_permission, (dialog, which) ->
+                        PermissionHelper.openAppListSettings(this))
+                .show();
     }
 
     @Override
@@ -94,7 +133,7 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         binding.loading.setVisibility(View.VISIBLE);
         binding.empty.setVisibility(View.GONE);
         executor.execute(() -> {
-            List<AppEntry> entries = readInstalledApps();
+            List<AppEntry> entries = readInstalledApps(selectedPackages);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) {
                     return;
@@ -106,7 +145,7 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         });
     }
 
-    private List<AppEntry> readInstalledApps() {
+    private List<AppEntry> readInstalledApps(Set<String> selected) {
         PackageManager pm = getPackageManager();
         List<ApplicationInfo> infos = pm.getInstalledApplications(PackageManager.MATCH_ALL);
         List<AppEntry> entries = new ArrayList<>(infos.size());
@@ -143,11 +182,19 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         }
 
         Collator collator = Collator.getInstance(Locale.CHINA);
-        entries.sort((left, right) -> collator.compare(left.label, right.label));
+        entries.sort((left, right) -> {
+            boolean leftSelected = selected.contains(left.packageName);
+            boolean rightSelected = selected.contains(right.packageName);
+            if (leftSelected != rightSelected) {
+                return leftSelected ? -1 : 1;
+            }
+            return collator.compare(left.label, right.label);
+        });
         return entries;
     }
 
     private void onSelectionChanged(Set<String> selected) {
+        selectedPackages = new HashSet<>(selected);
         Prefs.setStringSet(Keys.BLOCKED_PACKAGES, selected);
         binding.selectedCount.setText(getString(R.string.selected_count, selected.size()));
     }

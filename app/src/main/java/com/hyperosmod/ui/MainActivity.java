@@ -9,6 +9,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.hyperosmod.App;
 import com.hyperosmod.BuildConfig;
 import com.hyperosmod.Keys;
@@ -30,17 +31,21 @@ public final class MainActivity extends AppCompatActivity {
         }
     });
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private boolean appListPromptShown;
+    private boolean dndPromptShown;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        UiUtils.applySystemBars(this);
         setSupportActionBar(binding.toolbar);
 
         bindLockScreenRows();
         bindThemeRows();
         bindUpdateRows();
+        bindDndRows();
 
         binding.footer.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
         binding.buttonRestart.setOnClickListener(v -> restartSystemUi());
@@ -62,7 +67,9 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        UiUtils.applySystemBars(this);
         refreshAll();
+        checkPermissions();
     }
 
     @Override
@@ -107,6 +114,80 @@ public final class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(this, BlockedAppsActivity.class)));
     }
 
+    private void bindDndRows() {
+        bindSwitch(binding.rowRestoreDnd, Keys.RESTORE_DND_SYNC,
+                R.string.restore_dnd_title, R.string.restore_dnd_summary);
+        binding.rowRestoreDnd.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.RESTORE_DND_SYNC, checked);
+            updateDndRow();
+            if (checked) {
+                maybePromptDndAccess();
+            }
+        });
+
+        binding.rowDndPermission.title.setText(R.string.dnd_permission_title);
+        binding.rowDndPermission.getRoot().setOnClickListener(v ->
+                PermissionHelper.openDndAccessSettings(this));
+    }
+
+    private void updateDndRow() {
+        boolean installed = PermissionHelper.isMiFitnessInstalled(this);
+        boolean granted = installed && PermissionHelper.hasMiFitnessDndAccess(this);
+        boolean enabled = Prefs.getBoolean(Keys.RESTORE_DND_SYNC, false);
+
+        binding.rowDndPermission.getRoot().setEnabled(installed);
+        binding.rowDndPermission.getRoot().setAlpha(installed ? 1f : 0.45f);
+        if (!installed) {
+            binding.rowDndPermission.summary.setText(R.string.dnd_permission_not_installed);
+        } else if (granted) {
+            binding.rowDndPermission.summary.setText(R.string.dnd_permission_granted);
+        } else {
+            binding.rowDndPermission.summary.setText(R.string.dnd_permission_missing);
+        }
+        binding.dndHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
+    }
+
+    private void checkPermissions() {
+        if (!PermissionHelper.hasAppListAccess(this)) {
+            if (!appListPromptShown) {
+                appListPromptShown = true;
+                showAppListPermissionDialog();
+            }
+            return;
+        }
+        appListPromptShown = false;
+
+        if (Prefs.getBoolean(Keys.RESTORE_DND_SYNC, false)) {
+            maybePromptDndAccess();
+        }
+    }
+
+    private void showAppListPermissionDialog() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.app_list_permission_title)
+                .setMessage(R.string.app_list_permission_message)
+                .setNegativeButton(R.string.later, null)
+                .setPositiveButton(R.string.grant_permission, (dialog, which) ->
+                        PermissionHelper.openAppListSettings(this))
+                .show();
+    }
+
+    private void maybePromptDndAccess() {
+        if (dndPromptShown
+                || !PermissionHelper.isMiFitnessInstalled(this)
+                || PermissionHelper.hasMiFitnessDndAccess(this)) {
+            return;
+        }
+        dndPromptShown = true;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.dnd_permission_dialog_title)
+                .setMessage(R.string.dnd_permission_dialog_message)
+                .setNegativeButton(R.string.later, null)
+                .setPositiveButton(R.string.grant_permission, (dialog, which) ->
+                        PermissionHelper.openDndAccessSettings(this))
+                .show();
+    }
+
     private void bindSwitch(RowSwitchBinding row, String key, int title, int summary) {
         row.title.setText(title);
         row.summary.setText(summary);
@@ -127,6 +208,7 @@ public final class MainActivity extends AppCompatActivity {
 
         updateThemeRow();
         updateBlockedAppsRow();
+        updateDndRow();
         refreshStatus();
     }
 

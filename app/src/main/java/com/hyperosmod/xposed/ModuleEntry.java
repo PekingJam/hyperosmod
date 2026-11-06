@@ -35,14 +35,22 @@ public final class ModuleEntry extends XposedModule {
         if (!param.isFirstPackage()) {
             return;
         }
-        if (!"com.android.systemui".equals(processName)
-                || !"com.android.systemui".equals(param.getPackageName())) {
+        String packageName = param.getPackageName();
+        if ("com.android.systemui".equals(processName)
+                && "com.android.systemui".equals(packageName)) {
+            try {
+                new SystemUiHooks(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install SystemUI hooks", t);
+            }
             return;
         }
-        try {
-            new SystemUiHooks(this, param.getClassLoader()).install();
-        } catch (Throwable t) {
-            Logs.e("Failed to install SystemUI hooks", t);
+        if (("com.mi.health".equals(packageName) || "com.xiaomi.wearable".equals(packageName))) {
+            try {
+                new MiFitnessHooks(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install Mi Fitness DND hooks", t);
+            }
         }
     }
 }

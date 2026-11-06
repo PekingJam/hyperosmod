@@ -14,6 +14,7 @@
     <string name="section_lockscreen">系统界面 · 锁屏</string>
     <string name="section_theme">系统界面 · 主题</string>
     <string name="section_updates">应用更新保护</string>
+    <string name="section_mifitness">小米运动健康</string>
     <string name="section_tools">工具</string>
 
     <string name="unlock_notification_title">解除通知限制</string>
@@ -33,6 +34,22 @@
     <string name="choose_apps_summary_zero">尚未选择应用</string>
     <string name="choose_apps_summary">已保护 %1$d 个应用</string>
 
+    <string name="restore_dnd_title">恢复勿扰模式同步</string>
+    <string name="restore_dnd_summary">恢复小米运动健康与手环之间的勿扰状态同步（Android 15+ 官方已移除）</string>
+    <string name="dnd_permission_title">勿扰访问权限</string>
+    <string name="dnd_permission_granted">已授权，手环 ↔ 手机可双向同步</string>
+    <string name="dnd_permission_missing">未授权，点击前往系统设置为「小米运动健康」授予勿扰访问权限</string>
+    <string name="dnd_permission_not_installed">未安装小米运动健康</string>
+    <string name="dnd_permission_hint">勿扰访问权限由系统校验，模块无法代授；未授权时手环侧仍会跟随手机勿扰，但手机侧不会随手环切换。</string>
+
+    <string name="app_list_permission_title">需要应用列表权限</string>
+    <string name="app_list_permission_message">选择要保护的应用需要读取已安装应用列表。请在系统设置中允许 HyperOS Mod 获取应用列表，然后返回本页。</string>
+    <string name="dnd_permission_dialog_title">需要勿扰访问权限</string>
+    <string name="dnd_permission_dialog_message">请为「小米运动健康」授予勿扰访问权限，否则手环上的勿扰状态无法同步到手机。该权限由系统校验，模块无法代授。</string>
+    <string name="grant_permission">去授权</string>
+    <string name="later">稍后</string>
+    <string name="permission_granted">权限已授予</string>
+
     <string name="restart_systemui">重启系统界面</string>
     <string name="restart_systemui_summary">应用主题色等修改后，重启 SystemUI 使其生效</string>
     <string name="restart_running">正在重启系统界面…</string>
@@ -40,7 +57,7 @@
     <string name="restart_failed">重启失败，请确认已授予 Root 权限，或手动重启系统界面</string>
 
     <string name="footer">HyperOS Mod v%1$s · LSPosed API 102</string>
-    <string name="footer_scope">静态作用域：系统框架、系统界面</string>
+    <string name="footer_scope">静态作用域：系统框架、系统界面、小米运动健康</string>
 
     <string name="color_picker_title">选择主题色</string>
     <string name="color_hue">色相</string>
