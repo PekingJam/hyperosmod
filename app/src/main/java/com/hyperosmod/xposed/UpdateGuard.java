@@ -128,20 +128,41 @@ final class UpdateGuard {
      */
     private Throwable newBlockedFailure(String packageName) {
         String message = "更新已被 HyperOS Mod 阻止：" + packageName;
-        for (String className : new String[]{
-                "com.android.server.pm.PrepareFailure",
-                "android.content.pm.PackageManagerException"
-        }) {
-            try {
-                Class<?> type = Class.forName(className, false, classLoader);
-                Constructor<?> constructor = type.getDeclaredConstructor(int.class, String.class);
-                constructor.setAccessible(true);
-                return (Throwable) constructor.newInstance(INSTALL_FAILED_ABORTED, message);
-            } catch (Throwable ignored) {
-                // Try the next compatible exception type.
+
+        // Android 16: PrepareFailure is the type caught by prepareInstallPackages().
+        Class<?> prepareFailure = Reflect.findClass(classLoader, "com.android.server.pm.PrepareFailure");
+        if (prepareFailure != null) {
+            Throwable failure = constructFailure(prepareFailure, message);
+            if (failure != null) {
+                return failure;
             }
+            // Do not substitute a PackageManagerException here: Android 16 only catches
+            // PrepareFailure around the prepare step, so a different type could escape
+            // and crash the install worker. Fail closed (allow the install) instead.
+            return null;
         }
-        return null;
+
+        // Android 14/15 fallback: preparePackageLI throws PackageManagerException.
+        Class<?> managerException = Reflect.findClass(classLoader,
+                "android.content.pm.PackageManagerException");
+        return managerException == null ? null : constructFailure(managerException, message);
+    }
+
+    private static Throwable constructFailure(Class<?> type, String message) {
+        try {
+            Constructor<?> constructor = type.getDeclaredConstructor(int.class, String.class);
+            constructor.setAccessible(true);
+            return (Throwable) constructor.newInstance(INSTALL_FAILED_ABORTED, message);
+        } catch (Throwable ignored) {
+            // Fall through to the single-argument constructor.
+        }
+        try {
+            Constructor<?> constructor = type.getDeclaredConstructor(int.class);
+            constructor.setAccessible(true);
+            return (Throwable) constructor.newInstance(INSTALL_FAILED_ABORTED);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 }
 
