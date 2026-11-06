@@ -1,0 +1,173 @@
+package com.hyperosmod.ui;
+
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.graphics.drawable.Drawable;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.DividerItemDecoration;
+import androidx.recyclerview.widget.LinearLayoutManager;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.hyperosmod.Keys;
+import com.hyperosmod.R;
+import com.hyperosmod.data.Prefs;
+import com.hyperosmod.databinding.ActivityBlockedAppsBinding;
+
+import java.text.Collator;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/** Lets the user choose the packages whose updates must be rejected. */
+public final class BlockedAppsActivity extends AppCompatActivity {
+    private ActivityBlockedAppsBinding binding;
+    private AppListAdapter adapter;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        binding = ActivityBlockedAppsBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
+        setSupportActionBar(binding.toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+        binding.toolbar.setNavigationOnClickListener(v -> finish());
+
+        adapter = new AppListAdapter(Prefs.getStringSet(Keys.BLOCKED_PACKAGES), this::onSelectionChanged);
+        binding.appList.setLayoutManager(new LinearLayoutManager(this));
+        binding.appList.setAdapter(adapter);
+        binding.appList.addItemDecoration(
+                new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
+
+        binding.search.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                adapter.setQuery(s == null ? "" : s.toString());
+                updateEmptyState();
+            }
+        });
+
+        binding.filterGroup.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            if (checkedIds.contains(R.id.chip_user)) {
+                adapter.setFilter(AppListAdapter.FILTER_USER);
+            } else if (checkedIds.contains(R.id.chip_system)) {
+                adapter.setFilter(AppListAdapter.FILTER_SYSTEM);
+            } else {
+                adapter.setFilter(AppListAdapter.FILTER_ALL);
+            }
+            updateEmptyState();
+        });
+
+        binding.clearAll.setOnClickListener(v -> confirmClearAll());
+        binding.selectedCount.setText(getString(R.string.selected_count, adapter.selectedCount()));
+
+        loadApps();
+    }
+
+    @Override
+    protected void onDestroy() {
+        executor.shutdownNow();
+        super.onDestroy();
+    }
+
+    private void loadApps() {
+        binding.loading.setVisibility(View.VISIBLE);
+        binding.empty.setVisibility(View.GONE);
+        executor.execute(() -> {
+            List<AppEntry> entries = readInstalledApps();
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                adapter.submit(entries);
+                binding.loading.setVisibility(View.GONE);
+                updateEmptyState();
+            });
+        });
+    }
+
+    private List<AppEntry> readInstalledApps() {
+        PackageManager pm = getPackageManager();
+        List<ApplicationInfo> infos = pm.getInstalledApplications(PackageManager.MATCH_ALL);
+        List<AppEntry> entries = new ArrayList<>(infos.size());
+        String self = getPackageName();
+
+        for (ApplicationInfo info : infos) {
+            if (self.equals(info.packageName)) {
+                continue;
+            }
+            String label;
+            try {
+                label = info.loadLabel(pm).toString();
+            } catch (Throwable t) {
+                label = info.packageName;
+            }
+            String versionName = "";
+            long versionCode = 0;
+            try {
+                PackageInfo packageInfo = pm.getPackageInfo(info.packageName, 0);
+                versionName = packageInfo.versionName == null ? "" : packageInfo.versionName;
+                versionCode = packageInfo.getLongVersionCode();
+            } catch (Throwable ignored) {
+                // A package can disappear while the list is being built.
+            }
+            Drawable icon;
+            try {
+                icon = info.loadIcon(pm);
+            } catch (Throwable t) {
+                icon = null;
+            }
+            boolean system = (info.flags
+                    & (ApplicationInfo.FLAG_SYSTEM | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0;
+            entries.add(new AppEntry(label, info.packageName, versionName, versionCode, system, icon));
+        }
+
+        Collator collator = Collator.getInstance(Locale.CHINA);
+        entries.sort((left, right) -> collator.compare(left.label, right.label));
+        return entries;
+    }
+
+    private void onSelectionChanged(Set<String> selected) {
+        Prefs.setStringSet(Keys.BLOCKED_PACKAGES, selected);
+        binding.selectedCount.setText(getString(R.string.selected_count, selected.size()));
+    }
+
+    private void updateEmptyState() {
+        boolean empty = binding.loading.getVisibility() != View.VISIBLE
+                && adapter.visibleCount() == 0;
+        binding.empty.setVisibility(empty ? View.VISIBLE : View.GONE);
+        binding.appList.setVisibility(empty ? View.GONE : View.VISIBLE);
+    }
+
+    private void confirmClearAll() {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.clear_all)
+                .setMessage(R.string.clear_all_confirm)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.clear_all, (dialog, which) -> {
+                    adapter.clearSelection();
+                    updateEmptyState();
+                })
+                .show();
+    }
+}

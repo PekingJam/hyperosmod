@@ -1,0 +1,207 @@
+package com.hyperosmod.ui;
+
+import android.content.Intent;
+import android.content.res.ColorStateList;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import com.hyperosmod.App;
+import com.hyperosmod.BuildConfig;
+import com.hyperosmod.Keys;
+import com.hyperosmod.R;
+import com.hyperosmod.data.Prefs;
+import com.hyperosmod.databinding.ActivityMainBinding;
+import com.hyperosmod.databinding.RowSwitchBinding;
+
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public final class MainActivity extends AppCompatActivity {
+    private ActivityMainBinding binding;
+    private final Runnable serviceListener = () -> runOnUiThread(() -> {
+        if (!isFinishing() && !isDestroyed()) {
+            refreshAll();
+        }
+    });
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+        setSupportActionBar(binding.toolbar);
+
+        bindLockScreenRows();
+        bindThemeRows();
+        bindUpdateRows();
+
+        binding.footer.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
+        binding.buttonRestart.setOnClickListener(v -> restartSystemUi());
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Prefs.addServiceListener(serviceListener);
+        refreshAll();
+    }
+
+    @Override
+    protected void onStop() {
+        Prefs.removeServiceListener(serviceListener);
+        super.onStop();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshAll();
+    }
+
+    @Override
+    protected void onDestroy() {
+        executor.shutdownNow();
+        super.onDestroy();
+    }
+
+    private void bindLockScreenRows() {
+        bindSwitch(binding.rowUnlockNotification, Keys.UNLOCK_NOTIFICATION_RESTRICT,
+                R.string.unlock_notification_title, R.string.unlock_notification_summary);
+        bindSwitch(binding.rowKeepNotification, Keys.KEEP_NOTIFICATION,
+                R.string.keep_notification_title, R.string.keep_notification_summary);
+    }
+
+    private void bindThemeRows() {
+        bindSwitch(binding.rowCustomTheme, Keys.CUSTOM_THEME_ENABLED,
+                R.string.custom_theme_title, R.string.custom_theme_summary);
+        binding.rowCustomTheme.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.CUSTOM_THEME_ENABLED, checked);
+            updateThemeRow();
+        });
+
+        binding.rowThemeColor.title.setText(R.string.theme_color_title);
+        binding.rowThemeColor.getRoot().setOnClickListener(v -> {
+            if (!Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false)) {
+                return;
+            }
+            int current = Prefs.getInt(Keys.CUSTOM_THEME_COLOR, Keys.DEFAULT_THEME_COLOR);
+            ColorPickerDialog.show(this, current, color -> {
+                Prefs.setInt(Keys.CUSTOM_THEME_COLOR, color);
+                updateThemeRow();
+            });
+        });
+    }
+
+    private void bindUpdateRows() {
+        bindSwitch(binding.rowBlockUpdates, Keys.BLOCK_UPDATES_ENABLED,
+                R.string.block_updates_title, R.string.block_updates_summary);
+        binding.rowBlockedApps.title.setText(R.string.choose_apps_title);
+        binding.rowBlockedApps.getRoot().setOnClickListener(v ->
+                startActivity(new Intent(this, BlockedAppsActivity.class)));
+    }
+
+    private void bindSwitch(RowSwitchBinding row, String key, int title, int summary) {
+        row.title.setText(title);
+        row.summary.setText(summary);
+        row.switchView.setChecked(Prefs.getBoolean(key, false));
+        row.switchView.setOnCheckedChangeListener((button, checked) ->
+                Prefs.setBoolean(key, checked));
+    }
+
+    private void refreshAll() {
+        binding.rowUnlockNotification.switchView.setChecked(
+                Prefs.getBoolean(Keys.UNLOCK_NOTIFICATION_RESTRICT, false));
+        binding.rowKeepNotification.switchView.setChecked(
+                Prefs.getBoolean(Keys.KEEP_NOTIFICATION, false));
+        binding.rowCustomTheme.switchView.setChecked(
+                Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false));
+        binding.rowBlockUpdates.switchView.setChecked(
+                Prefs.getBoolean(Keys.BLOCK_UPDATES_ENABLED, false));
+
+        updateThemeRow();
+        updateBlockedAppsRow();
+        refreshStatus();
+    }
+
+    private void updateThemeRow() {
+        boolean enabled = Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false);
+        int color = Prefs.getInt(Keys.CUSTOM_THEME_COLOR, Keys.DEFAULT_THEME_COLOR);
+
+        binding.themeHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        binding.rowThemeColor.getRoot().setEnabled(enabled);
+        binding.rowThemeColor.getRoot().setAlpha(enabled ? 1f : 0.45f);
+        binding.rowThemeColor.colorDot.setBackgroundTintList(ColorStateList.valueOf(color));
+        binding.rowThemeColor.summary.setText(
+                String.format(Locale.ROOT, "#%06X", color & 0xFFFFFF));
+    }
+
+    private void updateBlockedAppsRow() {
+        Set<String> blocked = Prefs.getStringSet(Keys.BLOCKED_PACKAGES);
+        binding.rowBlockedApps.summary.setText(blocked.isEmpty()
+                ? getString(R.string.choose_apps_summary_zero)
+                : getString(R.string.choose_apps_summary, blocked.size()));
+    }
+
+    private void refreshStatus() {
+        boolean active = App.isActivated();
+
+        int title;
+        int summary;
+        int dotColor;
+        if (active) {
+            title = R.string.status_active;
+            summary = R.string.status_hint_active;
+            dotColor = R.color.accent_green;
+        } else {
+            title = R.string.status_inactive;
+            summary = R.string.status_hint_inactive;
+            dotColor = R.color.accent_red;
+        }
+
+        binding.statusTitle.setText(title);
+        binding.statusSummary.setText(summary);
+        binding.statusDot.setBackgroundTintList(ColorStateList.valueOf(
+                ContextCompat.getColor(this, dotColor)));
+    }
+
+    private void restartSystemUi() {
+        binding.buttonRestart.setEnabled(false);
+        binding.buttonRestart.setText(R.string.restart_running);
+        executor.execute(() -> {
+            boolean ok = false;
+            String[][] commands = {
+                    {"su", "-c", "killall com.android.systemui"},
+                    {"su", "-c", "pkill -f com.android.systemui"}
+            };
+            for (String[] command : commands) {
+                try {
+                    Process process = Runtime.getRuntime().exec(command);
+                    if (process.waitFor() == 0) {
+                        ok = true;
+                        break;
+                    }
+                } catch (Throwable ignored) {
+                    // Try the next command.
+                }
+            }
+            final boolean success = ok;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                binding.buttonRestart.setEnabled(true);
+                binding.buttonRestart.setText(R.string.restart_systemui);
+                Toast.makeText(this,
+                        success ? R.string.restart_success : R.string.restart_failed,
+                        Toast.LENGTH_LONG).show();
+            });
+        });
+    }
+}

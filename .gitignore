@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+*/build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing material
+keystore.jks
+*.jks
+*.keystore
+signing.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Reference checkouts and local toolchains used during development
+_ref/
+_tools/

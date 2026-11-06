@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HyperOS Mod</string>
+    <string name="xposed_description">解锁锁屏通知限制、解锁后保留通知、自定义主题色，并阻止指定应用被更新。</string>
+
+    <string name="status_title">模块状态</string>
+    <string name="status_active">已连接 LSPosed</string>
+    <string name="status_inactive">未激活</string>
+    <string name="status_scope_missing">作用域不完整</string>
+    <string name="status_hint_active">静态作用域已就绪，修改开关后立即生效。</string>
+    <string name="status_hint_inactive">请在 LSPosed 中启用本模块，然后重启系统界面。</string>
+    <string name="status_hint_scope">缺少系统界面或系统框架作用域，请在 LSPosed 中重新启用模块。</string>
+
+    <string name="section_lockscreen">系统界面 · 锁屏</string>
+    <string name="section_theme">系统界面 · 主题</string>
+    <string name="section_updates">应用更新保护</string>
+    <string name="section_tools">工具</string>
+
+    <string name="unlock_notification_title">解除通知限制</string>
+    <string name="unlock_notification_summary">让所有通知都可以在锁屏页显示</string>
+    <string name="keep_notification_title">解锁后保留通知</string>
+    <string name="keep_notification_summary">解锁后锁屏通知不会自动清除，直到被手动清除</string>
+
+    <string name="custom_theme_title">自定义主题色</string>
+    <string name="custom_theme_summary">使用指定颜色生成 Monet 主题，而不是从壁纸取色</string>
+    <string name="theme_color_title">主题颜色</string>
+    <string name="theme_color_default">跟随壁纸</string>
+    <string name="theme_color_restart_hint">修改后通常立即生效；若未生效，请重启系统界面。</string>
+
+    <string name="block_updates_title">阻止应用更新</string>
+    <string name="block_updates_summary">在系统安装阶段拒绝所选应用的更新，安装新应用不受影响</string>
+    <string name="choose_apps_title">选择要保护的应用</string>
+    <string name="choose_apps_summary_zero">尚未选择应用</string>
+    <string name="choose_apps_summary">已保护 %1$d 个应用</string>
+
+    <string name="restart_systemui">重启系统界面</string>
+    <string name="restart_systemui_summary">应用主题色等修改后，重启 SystemUI 使其生效</string>
+    <string name="restart_running">正在重启系统界面…</string>
+    <string name="restart_success">已发送重启指令，系统界面稍后会自动恢复</string>
+    <string name="restart_failed">重启失败，请确认已授予 Root 权限，或手动重启系统界面</string>
+
+    <string name="footer">HyperOS Mod v%1$s · LSPosed API 102</string>
+    <string name="footer_scope">静态作用域：系统框架、系统界面</string>
+
+    <string name="color_picker_title">选择主题色</string>
+    <string name="color_hue">色相</string>
+    <string name="color_saturation">饱和度</string>
+    <string name="color_brightness">明度</string>
+    <string name="color_hex">十六进制颜色</string>
+    <string name="color_presets">预设颜色</string>
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+
+    <string name="app_picker_title">更新保护</string>
+    <string name="search_hint">搜索应用名称或包名</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_user">用户应用</string>
+    <string name="filter_system">系统应用</string>
+    <string name="empty_apps">没有匹配的应用</string>
+    <string name="clear_all">清除全部</string>
+    <string name="clear_all_confirm">要取消保护所有应用吗？</string>
+    <string name="selected_count">已保护 %1$d 个应用</string>
+    <string name="system_app_badge">系统</string>
+    <string name="loading_apps">正在加载应用列表…</string>
+</resources>

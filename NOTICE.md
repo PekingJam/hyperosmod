@@ -1,0 +1,15 @@
+# NOTICE
+
+This project is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
+
+The SystemUI hook rules for:
+
+- lock-screen notification restriction removal,
+- keeping notifications after unlock, and
+- the custom Monet theme color
+
+are derived from [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler), Copyright (C) 2023-2026 HyperCeiler Contributions, which is also licensed under AGPL-3.0.
+
+The application-update guard, manager UI, preference bridge, build configuration and GitHub Actions workflow are original work for this project.
+
+HyperOS, MIUI and Xiaomi are trademarks of Xiaomi Corporation. LSPosed is a separate open-source project. This project is not affiliated with or endorsed by any of them.
