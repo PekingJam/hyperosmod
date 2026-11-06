@@ -39,7 +39,7 @@
 3. 在 `FitnessApp.onCreate()` 后延时 10 秒重新注册 `zen_mode` 观察者；
 4. 启动时主动调用一次 `getDeviceZenRules(Context)`，补齐“手环 → 手机”方向。
 
-> 需要在系统设置中给「小米运动健康」授予**勿扰访问权限**。该权限由系统校验，模块无法代授；应用内提供了跳转入口。手环 → 手机方向在每次启动运动健康后同步一次，手机 → 手环是即时的。
+> 需要在系统设置中给「小米运动健康」授予**勿扰访问权限**。该权限由系统校验，模块无法代授；应用内提供了跳转入口。若小米运动健康已开启「通知访问权限」，系统会强制启用勿扰访问，模块也会将其识别为已授权。手环 → 手机方向在每次启动运动健康后同步一次，手机 → 手环是即时的。
 
 ### 界面适配
 
@@ -167,5 +167,6 @@ Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `Fit
 锁屏通知限制、解锁后保留通知、自定义主题色的实现思路来自 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)；勿扰同步实现参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)。两者均为 AGPL-3.0。本仓库同样以 **AGPL-3.0** 发布，详见 [LICENSE](LICENSE) 与 [NOTICE.md](NOTICE.md)。
 
 本项目与小米、HyperOS、LSPosed 官方无隶属关系。使用风险自负。
+
 
 

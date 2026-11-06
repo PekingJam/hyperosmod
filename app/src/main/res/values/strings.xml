@@ -40,7 +40,7 @@
     <string name="dnd_permission_granted">已授权，手环 ↔ 手机可双向同步</string>
     <string name="dnd_permission_missing">未授权，点击前往系统设置为「小米运动健康」授予勿扰访问权限</string>
     <string name="dnd_permission_not_installed">未安装小米运动健康</string>
-    <string name="dnd_permission_hint">勿扰访问权限由系统校验，模块无法代授；未授权时手环侧仍会跟随手机勿扰，但手机侧不会随手环切换。</string>
+    <string name="dnd_permission_hint">勿扰访问权限由系统校验，模块无法代授；若小米运动健康已开启「通知访问权限」，系统会强制启用勿扰访问。</string>
 
     <string name="app_list_permission_title">需要应用列表权限</string>
     <string name="app_list_permission_message">选择要保护的应用需要读取已安装应用列表。请在系统设置中允许 HyperOS Mod 获取应用列表，然后返回本页。</string>

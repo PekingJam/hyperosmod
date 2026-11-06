@@ -9,7 +9,10 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.provider.Settings;
 
+import androidx.core.app.NotificationManagerCompat;
+
 import java.util.List;
+import java.util.Set;
 
 /** Runtime checks and settings deep links for the permissions this module needs. */
 public final class PermissionHelper {
@@ -68,17 +71,44 @@ public final class PermissionHelper {
     }
 
     /**
-     * DND access is a system-enforced special access granted to Mi Fitness itself. The
-     * module cannot grant it, but it can read the secure setting and guide the user.
+     * DND access is a system-enforced special access granted to Mi Fitness itself.
+     *
+     * <p>On MIUI/HyperOS, granting Mi Fitness "notification access" (a notification
+     * listener) also force-enables its DND access; the DND page then shows the switch as
+     * greyed out with "必须保持启用状态，因为通知访问权限已开启". In that state the
+     * package is not necessarily present in
+     * {@code enabled_notification_policy_access_packages}, so also accept an enabled
+     * notification listener as evidence of DND access.</p>
      */
     public static boolean hasMiFitnessDndAccess(Context context) {
         try {
             String enabled = Settings.Secure.getString(context.getContentResolver(),
                     "enabled_notification_policy_access_packages");
-            if (enabled == null) {
-                return false;
+            if (enabled != null
+                    && (enabled.contains(MI_FITNESS) || enabled.contains(MI_WEARABLE))) {
+                return true;
             }
-            return enabled.contains(MI_FITNESS) || enabled.contains(MI_WEARABLE);
+        } catch (Throwable ignored) {
+            // Fall through to the notification-listener check.
+        }
+
+        return hasEnabledNotificationListener(context, MI_FITNESS)
+                || hasEnabledNotificationListener(context, MI_WEARABLE);
+    }
+
+    private static boolean hasEnabledNotificationListener(Context context, String packageName) {
+        try {
+            Set<String> packages = NotificationManagerCompat.getEnabledListenerPackages(context);
+            if (packages != null && packages.contains(packageName)) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+            // Fall back to the secure setting below.
+        }
+        try {
+            String listeners = Settings.Secure.getString(context.getContentResolver(),
+                    "enabled_notification_listeners");
+            return listeners != null && listeners.contains(packageName);
         } catch (Throwable ignored) {
             return false;
         }
