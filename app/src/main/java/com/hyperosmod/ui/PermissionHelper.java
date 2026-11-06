@@ -35,11 +35,19 @@ public final class PermissionHelper {
             if (apps.size() < 5) {
                 return false;
             }
+            boolean hasSettings = false;
+            boolean hasOtherUserApp = false;
             for (ApplicationInfo info : apps) {
                 if ("com.android.settings".equals(info.packageName)) {
-                    return true;
+                    hasSettings = true;
+                }
+                if (!context.getPackageName().equals(info.packageName)
+                        && (info.flags & (ApplicationInfo.FLAG_SYSTEM
+                        | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) == 0) {
+                    hasOtherUserApp = true;
                 }
             }
+            return hasSettings && hasOtherUserApp;
         } catch (Throwable ignored) {
             // Fall through to "not granted".
         }
