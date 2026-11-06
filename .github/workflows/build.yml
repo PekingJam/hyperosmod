@@ -13,11 +13,22 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
     env:
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read module version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^[[:space:]]*versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -n1)
+          if [ -z "$VERSION" ]; then
+            VERSION="unknown"
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -75,11 +86,12 @@ jobs:
           path: artifacts
 
       - name: Rename APK
-        run: mv artifacts/app-release.apk "artifacts/HyperOSMod-${GITHUB_REF_NAME}.apk"
+        run: mv artifacts/app-release.apk "artifacts/HyperOSMod-${{ needs.build.outputs.version }}.apk"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
+          name: HyperOSMod v${{ needs.build.outputs.version }}
           files: artifacts/HyperOSMod-*.apk
           generate_release_notes: true
 
@@ -107,21 +119,22 @@ jobs:
           path: artifacts
 
       - name: Rename APK
-        run: mv artifacts/app-release.apk artifacts/HyperOSMod-main.apk
+        run: mv artifacts/app-release.apk "artifacts/HyperOSMod-${{ needs.build.outputs.version }}.apk"
 
       - name: Publish/update rolling main release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: main-latest
           target_commitish: ${{ github.sha }}
-          name: Latest main build
+          name: Latest main build (v${{ needs.build.outputs.version }})
           body: |
             Automatic build from the main branch.
 
+            - Module version: `${{ needs.build.outputs.version }}`
             - Commit: `${{ github.sha }}`
             - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           prerelease: false
           make_latest: 'true'
-          files: artifacts/HyperOSMod-main.apk
+          files: artifacts/HyperOSMod-${{ needs.build.outputs.version }}.apk
           overwrite_files: true
           fail_on_unmatched_files: true
