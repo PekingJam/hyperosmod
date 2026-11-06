@@ -1,0 +1,11 @@
+* text=auto
+
+# Gradle wrapper: the shell script must stay LF, the batch file CRLF.
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+
+# Keep binary resources untouched.
+*.jar binary
+*.apk binary
+*.webp binary
+*.png binary
