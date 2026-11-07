@@ -43,6 +43,11 @@ public final class Keys {
     public static final String TELEPHONY_SIM_OPERATOR = "sim_operator";
     public static final String TELEPHONY_SIM_OPERATOR_NAME = "sim_operator_name";
 
+    /** FCM/GCM wake-up and HyperOS restriction fixes. */
+    public static final String FCM_FIX_ENABLED = "fcm_fix_enabled";
+    public static final String FCM_TARGETS = "fcm_targets";
+    public static final String FCM_KEEP_NOTIFICATION = "fcm_keep_notification";
+
     /** Preference key for one telephony field of SIM slot 0 or 1. */
     public static String telephony(String field, int slot) {
         return "telephony_" + field + "_" + slot;

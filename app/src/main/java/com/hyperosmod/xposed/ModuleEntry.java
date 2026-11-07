@@ -28,6 +28,11 @@ public final class ModuleEntry extends XposedModule {
         } catch (Throwable t) {
             Logs.e("Failed to install update guard", t);
         }
+        try {
+            new FcmSystemHooks(this, param.getClassLoader()).install();
+        } catch (Throwable t) {
+            Logs.e("Failed to install FCM system hooks", t);
+        }
     }
 
     @Override
@@ -59,6 +64,13 @@ public final class ModuleEntry extends XposedModule {
                 new TelephonyHooks(this, param.getClassLoader()).install();
             } catch (Throwable t) {
                 Logs.e("Failed to install telephony hooks", t);
+            }
+        }
+        if ("com.miui.powerkeeper".equals(packageName)) {
+            try {
+                new FcmPowerkeeperHooks(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install FCM powerkeeper hooks", t);
             }
         }
     }

@@ -47,6 +47,7 @@ public final class MainActivity extends AppCompatActivity {
         bindUpdateRows();
         bindDndRows();
         bindTelephonyRows();
+        bindFcmRows();
 
         binding.footer.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
         binding.buttonRestart.setOnClickListener(v -> restartSystemUi());
@@ -173,6 +174,32 @@ public final class MainActivity extends AppCompatActivity {
         binding.telephonyHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
     }
 
+    private void bindFcmRows() {
+        bindSwitch(binding.rowFcmEnabled, Keys.FCM_FIX_ENABLED,
+                R.string.fcm_fix_title, R.string.fcm_fix_summary);
+        binding.rowFcmTargets.title.setText(R.string.fcm_targets_title);
+        binding.rowFcmTargets.getRoot().setOnClickListener(v -> {
+            Intent intent = new Intent(this, BlockedAppsActivity.class);
+            intent.putExtra(BlockedAppsActivity.EXTRA_MODE,
+                    BlockedAppsActivity.MODE_FCM_TARGETS);
+            startActivity(intent);
+        });
+        bindSwitch(binding.rowFcmKeep, Keys.FCM_KEEP_NOTIFICATION,
+                R.string.fcm_keep_title, R.string.fcm_keep_summary, true);
+    }
+
+    private void updateFcmRows() {
+        boolean enabled = Prefs.getBoolean(Keys.FCM_FIX_ENABLED, false);
+        Set<String> targets = Prefs.getStringSet(Keys.FCM_TARGETS);
+        binding.rowFcmTargets.summary.setText(targets.isEmpty()
+                ? getString(R.string.fcm_targets_summary_zero)
+                : getString(R.string.fcm_targets_summary, targets.size()));
+        binding.rowFcmKeep.getRoot().setEnabled(enabled);
+        binding.rowFcmKeep.getRoot().setAlpha(enabled ? 1f : 0.45f);
+        binding.rowFcmKeep.switchView.setEnabled(enabled);
+        binding.fcmHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
+    }
+
     private void checkPermissions() {
         if (!PermissionHelper.hasAppListAccess(this)) {
             if (!appListPromptShown) {
@@ -215,9 +242,14 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void bindSwitch(RowSwitchBinding row, String key, int title, int summary) {
+        bindSwitch(row, key, title, summary, false);
+    }
+
+    private void bindSwitch(RowSwitchBinding row, String key, int title, int summary,
+                            boolean defaultValue) {
         row.title.setText(title);
         row.summary.setText(summary);
-        row.switchView.setChecked(Prefs.getBoolean(key, false));
+        row.switchView.setChecked(Prefs.getBoolean(key, defaultValue));
         row.switchView.setOnCheckedChangeListener((button, checked) ->
                 Prefs.setBoolean(key, checked));
     }
@@ -233,11 +265,16 @@ public final class MainActivity extends AppCompatActivity {
                 Prefs.getBoolean(Keys.BLOCK_UPDATES_ENABLED, false));
         binding.rowTelephonyEnabled.switchView.setChecked(
                 Prefs.getBoolean(Keys.TELEPHONY_ENABLED, false));
+        binding.rowFcmEnabled.switchView.setChecked(
+                Prefs.getBoolean(Keys.FCM_FIX_ENABLED, false));
+        binding.rowFcmKeep.switchView.setChecked(
+                Prefs.getBoolean(Keys.FCM_KEEP_NOTIFICATION, true));
 
         updateThemeRow();
         updateBlockedAppsRow();
         updateDndRow();
         updateTelephonyRows();
+        updateFcmRows();
         refreshStatus();
     }
 

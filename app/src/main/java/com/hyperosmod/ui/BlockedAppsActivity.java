@@ -33,6 +33,7 @@ public final class BlockedAppsActivity extends AppCompatActivity {
     public static final String EXTRA_MODE = "mode";
     public static final int MODE_BLOCK_UPDATES = 0;
     public static final int MODE_TELEPHONY_TARGETS = 1;
+    public static final int MODE_FCM_TARGETS = 2;
 
     private ActivityBlockedAppsBinding binding;
     private AppListAdapter adapter;
@@ -52,14 +53,22 @@ public final class BlockedAppsActivity extends AppCompatActivity {
 
         mode = getIntent().getIntExtra(EXTRA_MODE, MODE_BLOCK_UPDATES);
         storeKey = mode == MODE_TELEPHONY_TARGETS
-                ? Keys.TELEPHONY_TARGETS : Keys.BLOCKED_PACKAGES;
+                ? Keys.TELEPHONY_TARGETS
+                : (mode == MODE_FCM_TARGETS ? Keys.FCM_TARGETS : Keys.BLOCKED_PACKAGES);
 
         setSupportActionBar(binding.toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
-        binding.toolbar.setTitle(mode == MODE_TELEPHONY_TARGETS
-                ? R.string.telephony_targets_picker_title : R.string.app_picker_title);
+        int titleRes;
+        if (mode == MODE_TELEPHONY_TARGETS) {
+            titleRes = R.string.telephony_targets_picker_title;
+        } else if (mode == MODE_FCM_TARGETS) {
+            titleRes = R.string.fcm_targets_picker_title;
+        } else {
+            titleRes = R.string.app_picker_title;
+        }
+        binding.toolbar.setTitle(titleRes);
         binding.toolbar.setNavigationOnClickListener(v -> finish());
 
         selectedPackages = Prefs.getStringSet(storeKey);
@@ -206,8 +215,8 @@ public final class BlockedAppsActivity extends AppCompatActivity {
     }
 
     private int countStringRes() {
-        return mode == MODE_TELEPHONY_TARGETS
-                ? R.string.selected_targets_count : R.string.selected_count;
+        return mode == MODE_BLOCK_UPDATES
+                ? R.string.selected_count : R.string.selected_targets_count;
     }
 
     private void onSelectionChanged(Set<String> selected) {
@@ -235,4 +244,5 @@ public final class BlockedAppsActivity extends AppCompatActivity {
                 .show();
     }
 }
+
 

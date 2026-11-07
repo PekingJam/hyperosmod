@@ -7,6 +7,7 @@
 - 锁屏通知与主题色：参考 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)
 - 小米运动健康勿扰同步：参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)
 - HyperOS Passkey 修复：整合自 [HyperPasskey](https://github.com/Howard20181/HyperPasskey)
+- FCM/GCM 推送修复：参考 [fcmfix](https://github.com/kooritea/fcmfix)
 - 应用更新保护、电话/SIM 信息伪装、设置界面与权限检测：本项目新增
 
 ## 功能
@@ -46,6 +47,23 @@
 
 > 需要在系统设置中给「小米运动健康」授予**勿扰访问权限**。该权限由系统校验，模块无法代授；应用内提供了跳转入口。若小米运动健康已开启「通知访问权限」，系统会强制启用勿扰访问，模块也会将其识别为已授权。手环 → 手机方向在每次启动运动健康后同步一次，手机 → 手环是即时的。
 
+### FCM / GCM 推送修复
+
+HyperOS 会阻止 GCM/FCM 广播唤醒处于 stopped 状态的应用，日志中通常表现为
+`Failed to broadcast to stopped app`。本模块参考 fcmfix 的逻辑，针对选定的应用：
+
+- 在 `system_server` 的 `BroadcastController#broadcastIntentLocked` 中为 FCM 广播补上
+  `FLAG_INCLUDE_STOPPED_PACKAGES`，并在 `appOp == -1` 时改为 `OP_WAKE_LOCK`；
+- 绕过 HyperOS 的 `BroadcastQueueModernStubImpl.checkApplicationAutoStart` /
+  `checkReceiverIfRestricted`、`AutoStartManagerServiceStubImpl.isAllowStartService`、
+  `SmartPowerService.shouldInterceptBroadcast` 等自启动/智能省电拦截；
+- 允许目标应用的本地通知通过 MIUI 通知限制；
+- 可选：应用被系统停止时保留其通知；
+- 在 `com.miui.powerkeeper` 中把 GMS 移出限制名单，并关闭 `gms_control`。
+
+> 需要在 LSPosed 中勾选 `system` 与 `com.miui.powerkeeper`，并在模块的“推送目标应用”里勾选需要接收推送的应用。修改目标后建议重启目标应用。
+>
+> 说明：fcmfix 的 GMS 心跳/重连定时器修复依赖具体 GMS 版本且需要额外配置，本模块未集成该部分，专注于 HyperOS 的广播、自启动和后台限制。
 ### HyperOS Passkey 修复
 
 整合 HyperPasskey 的实现，修复 HyperOS 上 Passkey/凭据管理入口不显示、无法正常使用的问题：
@@ -106,6 +124,7 @@ com.xiaomi.wearable
 com.android.settings
 com.miui.securitycenter
 com.xiaomi.scanner
+com.miui.powerkeeper
 ```
 
 建议按需勾选：
@@ -114,7 +133,8 @@ com.xiaomi.scanner
 - 使用应用更新保护：勾选 `system`；
 - 使用运动健康勿扰同步：勾选 `com.mi.health`（旧版另加 `com.xiaomi.wearable`）；
 - 使用 Passkey 修复：勾选 `system`、`com.android.settings`、`com.miui.securitycenter`、`com.xiaomi.scanner`；
-- 使用电话/SIM 伪装：**必须额外勾选你要测试的目标应用**（例如你自己的 APK 或其包名），否则模块不会加载到该应用进程。
+- 使用电话/SIM 伪装：**必须额外勾选你要测试的目标应用**（例如你自己的 APK 或其包名），否则模块不会加载到该应用进程；
+- 使用 FCM 修复：勾选 `system`、`com.miui.powerkeeper`，并在“推送目标应用”里选择应用。
 
 ## 环境要求
 
@@ -131,8 +151,9 @@ com.xiaomi.scanner
 4. 重启设备（首次启用必须重启，让 system_server、SystemUI、运动健康等进程加载模块）；
 5. 打开应用，按需开启功能；
 6. 电话/SIM 伪装：先选择“目标应用”，再编辑 SIM 1 / SIM 2 信息并保存；
-7. 开启“恢复勿扰模式同步”后，按提示给小米运动健康授予勿扰访问权限；
-8. 主题色修改后，点“重启系统界面”或手动重启 SystemUI（通常无需）。
+7. FCM 修复：选择“推送目标应用”，并在 LSPosed 作用域勾选 `system`、`com.miui.powerkeeper`；
+8. 开启“恢复勿扰模式同步”后，按提示给小米运动健康授予勿扰访问权限；
+9. 主题色修改后，点“重启系统界面”或手动重启 SystemUI（通常无需）。
 
 ## 构建
 
@@ -194,7 +215,9 @@ app/src/main/
 │       ├── SystemUiHooks.java       # 锁屏通知 + 主题色
 │       ├── UpdateGuard.java         # 应用更新保护
 │       ├── MiFitnessHooks.java      # 小米运动健康勿扰同步
-│       └── TelephonyHooks.java      # 电话 / SIM 信息伪装
+│       ├── TelephonyHooks.java      # 电话 / SIM 信息伪装
+│       ├── FcmSystemHooks.java      # FCM 广播 / 自启动 / 通知限制
+│       └── FcmPowerkeeperHooks.java # 电源管理中的 GMS 限制
 ├── java/io/github/howard20181/hyperpasskey/ # Passkey 修复（来自 HyperPasskey）
 └── resources/META-INF/xposed/
     ├── module.prop                  # API 102 / 手动作用域
@@ -235,14 +258,18 @@ Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `Fit
 - 更新保护通过系统安装器实现，不会阻止应用商店下载 APK，只会在安装阶段拒绝。
 - 勿扰同步依赖小米运动健康自身的类；运动健康版本变化后可能需要更新 Hook。
 - 勿扰访问权限由系统校验，模块只能提示和跳转，不能代授。
+- FCM 修复依赖 HyperOS 的系统类名和广播参数布局；系统升级后可能需要调整。未集成依赖 GMS 版本的定时器重连修复。
+- FCM 目标应用必须同时在 LSPosed 作用域和模块目标列表中。
 
 ## 致谢与许可
 
 - 锁屏通知限制、解锁后保留通知、自定义主题色：来自 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)（AGPL-3.0）
 - 勿扰同步：参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)（AGPL-3.0）
 - Passkey 修复与 hiddenapi stubs：来自 [HyperPasskey](https://github.com/Howard20181/HyperPasskey)（GPL-3.0，AGPL-3.0 项目可兼容整合）
+- FCM 修复：参考 [fcmfix](https://github.com/kooritea/fcmfix)（GPL-3.0）
 
 本仓库以 **AGPL-3.0** 发布，详见 [LICENSE](LICENSE) 与 [NOTICE.md](NOTICE.md)。
 
 本项目与小米、HyperOS、LSPosed 官方无隶属关系。使用风险自负。
+
 

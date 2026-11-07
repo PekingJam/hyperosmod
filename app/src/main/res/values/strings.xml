@@ -16,6 +16,7 @@
     <string name="section_updates">应用更新保护</string>
     <string name="section_mifitness">小米运动健康</string>
     <string name="section_telephony">电话 / SIM 信息</string>
+    <string name="section_fcm">FCM 推送修复</string>
     <string name="section_tools">工具</string>
 
     <string name="unlock_notification_title">解除通知限制</string>
@@ -71,6 +72,16 @@
     <string name="telephony_scope_hint">提示：模块已改为手动作用域。请在 LSPosed 中勾选本模块，并勾选目标应用；只选目标应用即可，不必勾选全部应用。</string>
     <string name="telephony_targets_picker_title">选择伪装目标应用</string>
     <string name="selected_targets_count">已选择 %1$d 个应用</string>
+
+    <string name="fcm_fix_title">修复 FCM 推送</string>
+    <string name="fcm_fix_summary">让 GCM/FCM 广播唤醒已停止的目标应用，绕过 HyperOS 自启动与后台限制</string>
+    <string name="fcm_targets_title">推送目标应用</string>
+    <string name="fcm_targets_summary_zero">尚未选择需要修复推送的应用</string>
+    <string name="fcm_targets_summary">已选择 %1$d 个应用</string>
+    <string name="fcm_keep_title">停止应用时保留通知</string>
+    <string name="fcm_keep_summary">阻止系统在应用被停止时自动清除其通知</string>
+    <string name="fcm_hint">需在 LSPosed 中勾选 system 与 com.miui.powerkeeper；目标应用也需要勾选。修改目标或开关后，建议重启目标应用。</string>
+    <string name="fcm_targets_picker_title">选择 FCM 目标应用</string>
 
     <string name="app_list_permission_title">需要应用列表权限</string>
     <string name="app_list_permission_message">选择要保护的应用需要读取已安装应用列表。请在系统设置中允许 HyperOS Mod 获取应用列表，然后返回本页。</string>
