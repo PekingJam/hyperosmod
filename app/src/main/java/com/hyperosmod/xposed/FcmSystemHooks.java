@@ -55,6 +55,11 @@ final class FcmSystemHooks {
         } catch (Throwable t) {
             Logs.e("FCM: failed to hook notification cleanup", t);
         }
+        try {
+            new FcmGmsWhitelist().install();
+        } catch (Throwable t) {
+            Logs.e("FCM: failed to install GMS whitelist guard", t);
+        }
     }
 
     // ---------------------------------------------------------------------

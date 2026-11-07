@@ -59,7 +59,10 @@ HyperOS 会阻止 GCM/FCM 广播唤醒处于 stopped 状态的应用，日志中
   `SmartPowerService.shouldInterceptBroadcast` 等自启动/智能省电拦截；
 - 允许目标应用的本地通知通过 MIUI 通知限制；
 - 可选：应用被系统停止时保留其通知；
-- 在 `com.miui.powerkeeper` 中把 GMS 移出限制名单，并关闭 `gms_control`。
+- 在 `com.miui.powerkeeper` 中把 GMS 移出限制名单，并关闭 `gms_control`；
+- 在 `system_server` 中检查并修复 `Settings.System.MILLET_NO_RESTRICT_APP`，确保
+  `com.google.android.gms` 在 HyperOS 的免限制名单中，并在修复后发送 GCM/heartbeat
+  重连广播。
 
 > 需要在 LSPosed 中勾选 `system` 与 `com.miui.powerkeeper`，并在模块的“推送目标应用”里勾选需要接收推送的应用。修改目标后建议重启目标应用。
 >
@@ -266,13 +269,14 @@ Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `Fit
 - 勿扰访问权限由系统校验，模块只能提示和跳转，不能代授。
 - FCM 修复依赖 HyperOS 的系统类名和广播参数布局；系统升级后可能需要调整。未集成依赖 GMS 版本的定时器重连修复。
 - FCM 目标应用必须同时在 LSPosed 作用域和模块目标列表中。
+- 如果 FCM 诊断正常但个别应用仍收不到，需将该应用的电池策略设为“无限制”，必要时开启自启动；模块无法代替这些系统设置。
 
 ## 致谢与许可
 
 - 锁屏通知限制、解锁后保留通知、自定义主题色：来自 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)（AGPL-3.0）
 - 勿扰同步：参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)（AGPL-3.0）
 - Passkey 修复与 hiddenapi stubs：来自 [HyperPasskey](https://github.com/Howard20181/HyperPasskey)（GPL-3.0，AGPL-3.0 项目可兼容整合）
-- FCM 修复：参考 [fcmfix](https://github.com/kooritea/fcmfix)（GPL-3.0）
+- FCM 修复：参考 [fcmfix](https://github.com/kooritea/fcmfix)（GPL-3.0）与 [FCMGuard-HyperOS](https://github.com/ReedGAOOO/FCMGuard-HyperOS)（MIT）
 
 本仓库以 **AGPL-3.0** 发布，详见 [LICENSE](LICENSE) 与 [NOTICE.md](NOTICE.md)。
 

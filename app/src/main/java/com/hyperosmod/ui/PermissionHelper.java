@@ -114,6 +114,25 @@ public final class PermissionHelper {
         }
     }
 
+    /** True/false when readable, null when HyperOS hides the setting from third-party apps. */
+    public static Boolean isGmsInMilletWhitelist(Context context) {
+        try {
+            String value = Settings.System.getString(context.getContentResolver(),
+                    "MILLET_NO_RESTRICT_APP");
+            if (value == null) {
+                return false;
+            }
+            for (String part : value.split(",")) {
+                if ("com.google.android.gms".equals(part.trim())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     /** Opens the MIUI permission editor for this app, with a stock Settings fallback. */
     public static void openAppListSettings(Context context) {
         String[][] editors = {

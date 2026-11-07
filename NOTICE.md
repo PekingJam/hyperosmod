@@ -14,7 +14,7 @@ The Mi Fitness DND/zen-mode restoration logic is adapted from [MiFitnessAdAway](
 
 The HyperOS passkey fix, including `PasskeyHook`, `MemoryCache`, `UnsafeUtils` and the `hiddenapi-stubs` compile-time stubs, is adapted from [HyperPasskey](https://github.com/Howard20181/HyperPasskey), licensed under GPL-3.0. GPL-3.0 and AGPL-3.0 are compatible; the combined work is distributed under AGPL-3.0.
 
-The FCM/GCM broadcast, HyperOS auto-start, notification-cleanup and power-keeper fixes are adapted from [fcmfix](https://github.com/kooritea/fcmfix), licensed under GPL-3.0.
+The FCM/GCM broadcast, HyperOS auto-start, notification-cleanup and power-keeper fixes are adapted from [fcmfix](https://github.com/kooritea/fcmfix), licensed under GPL-3.0. The HyperOS 3 `MILLET_NO_RESTRICT_APP` GMS whitelist repair and reconnect approach is informed by [FCMGuard-HyperOS](https://github.com/ReedGAOOO/FCMGuard-HyperOS), licensed under MIT.
 
 The application-update guard, telephony/SIM spoofing, manager UI, permission handling, preference bridge, build configuration and GitHub Actions workflow are original work for this project.
 

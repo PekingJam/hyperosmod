@@ -207,6 +207,8 @@ public final class MainActivity extends AppCompatActivity {
             binding.fcmHint.setText(R.string.fcm_targets_missing);
         } else if (!App.isInScope("system") || !App.isInScope("com.miui.powerkeeper")) {
             binding.fcmHint.setText(R.string.fcm_scope_missing);
+        } else if (Boolean.FALSE.equals(PermissionHelper.isGmsInMilletWhitelist(this))) {
+            binding.fcmHint.setText(R.string.fcm_whitelist_missing);
         } else {
             binding.fcmHint.setText(R.string.fcm_hint);
         }

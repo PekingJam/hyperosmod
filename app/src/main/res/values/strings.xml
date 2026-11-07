@@ -83,6 +83,7 @@
     <string name="fcm_hint">需在 LSPosed 中勾选 system 与 com.miui.powerkeeper；目标应用也需要勾选。修改后建议重启目标应用/设备。若仍无效，请在 LSPosed 日志中过滤 HyperOSMod 查看 FCM 日志。</string>
     <string name="fcm_targets_missing">尚未选择推送目标应用。请先在“推送目标应用”中勾选需要接收 FCM 的应用。</string>
     <string name="fcm_scope_missing">LSPosed 作用域缺少 system 或 com.miui.powerkeeper，FCM 修复不会生效。请在 LSPosed 中勾选这两个作用域并重启设备。</string>
+    <string name="fcm_whitelist_missing">HyperOS 的免限制名单中没有 GMS，系统 Hook 会尝试自动修复；修复后建议重启设备，再测试 FCM。</string>
     <string name="fcm_targets_picker_title">选择 FCM 目标应用</string>
 
     <string name="app_list_permission_title">需要应用列表权限</string>
