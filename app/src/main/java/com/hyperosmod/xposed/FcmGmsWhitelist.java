@@ -35,56 +35,78 @@ final class FcmGmsWhitelist {
     private Context systemContext;
     private ContentObserver observer;
     private SharedPreferences.OnSharedPreferenceChangeListener prefListener;
+    private int attempts;
+    private boolean started;
 
     void install() {
-        try {
-            systemContext = systemContext();
-        } catch (Throwable t) {
-            Logs.w("FCM: system context unavailable, cannot repair GMS whitelist", t);
-            return;
-        }
-        if (systemContext == null) {
-            Logs.w("FCM: system context is null, cannot repair GMS whitelist", null);
-            return;
-        }
+        // onSystemServerStarting runs before ContentService is published. Touching
+        // ContentResolver here gives a resolver whose IContentService is still null.
+        handler.postDelayed(this::start, INITIAL_DELAY_MS);
+    }
 
+    private void start() {
+        if (started) {
+            return;
+        }
+        try {
+            if (systemContext == null) {
+                systemContext = systemContext();
+            }
+            if (systemContext == null) {
+                throw new IllegalStateException("system context is null");
+            }
+            // Probe ContentService readiness before registering an observer.
+            Settings.System.getString(systemContext.getContentResolver(), KEY);
+            registerObserver();
+            registerPreferenceListener();
+            repair("start");
+            started = true;
+            schedulePeriodic();
+            Logs.i("FCM: GMS whitelist guard started");
+        } catch (Throwable t) {
+            attempts++;
+            if (attempts <= 30) {
+                Logs.w("FCM: ContentService not ready, retrying whitelist guard ("
+                        + attempts + ")", t);
+                handler.postDelayed(this::start, 10_000L);
+            } else {
+                Logs.w("FCM: unable to start GMS whitelist guard", t);
+            }
+        }
+    }
+
+    private void registerObserver() {
+        observer = new ContentObserver(handler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                handler.postDelayed(() -> repair("setting changed"), 400L);
+            }
+        };
+        ContentResolver resolver = systemContext.getContentResolver();
+        resolver.registerContentObserver(Settings.System.getUriFor(KEY), false, observer);
+    }
+
+    private void registerPreferenceListener() {
+        SharedPreferences prefs = HookPrefs.raw();
+        if (prefs == null) {
+            return;
+        }
+        prefListener = (sharedPreferences, key) -> {
+            if (Keys.FCM_FIX_ENABLED.equals(key) || Keys.FCM_TARGETS.equals(key)) {
+                handler.post(() -> repair("preference changed"));
+            }
+        };
+        prefs.registerOnSharedPreferenceChangeListener(prefListener);
+    }
+
+    private void schedulePeriodic() {
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                repair("initial");
+                repair("periodic");
                 handler.postDelayed(this, PERIODIC_MS);
             }
-        }, INITIAL_DELAY_MS);
-
-        try {
-            observer = new ContentObserver(handler) {
-                @Override
-                public void onChange(boolean selfChange) {
-                    handler.removeCallbacksAndMessages(this);
-                    handler.postDelayed(() -> repair("setting changed"), 400L);
-                }
-            };
-            ContentResolver resolver = systemContext.getContentResolver();
-            resolver.registerContentObserver(Settings.System.getUriFor(KEY), false, observer);
-        } catch (Throwable t) {
-            Logs.w("FCM: unable to observe " + KEY, t);
-        }
-
-        try {
-            SharedPreferences prefs = HookPrefs.raw();
-            if (prefs != null) {
-                prefListener = (sharedPreferences, key) -> {
-                    if (Keys.FCM_FIX_ENABLED.equals(key) || Keys.FCM_TARGETS.equals(key)) {
-                        handler.post(() -> repair("preference changed"));
-                    }
-                };
-                prefs.registerOnSharedPreferenceChangeListener(prefListener);
-            }
-        } catch (Throwable t) {
-            Logs.w("FCM: unable to observe FCM preferences", t);
-        }
-
-        repair("install");
+        }, PERIODIC_MS);
     }
 
     private void repair(String reason) {

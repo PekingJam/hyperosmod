@@ -69,11 +69,11 @@ final class FcmSystemHooks {
     private void hookBroadcastController() {
         Class<?> controller = Reflect.findClass(classLoader,
                 "com.android.server.am.BroadcastController");
-        Method target = findMethodWithMostParams(controller, "broadcastIntentLocked");
+        Method target = findBroadcastIntentLocked(controller);
         if (target == null) {
             controller = Reflect.findClass(classLoader,
                     "com.android.server.am.ActivityManagerService");
-            target = findMethodWithMostParams(controller, "broadcastIntentLocked");
+            target = findBroadcastIntentLocked(controller);
         }
         if (target == null) {
             Logs.w("FCM: broadcastIntentLocked not found", null);
@@ -82,13 +82,15 @@ final class FcmSystemHooks {
 
         final int intentIndex = findIntentIndex(target);
         final int appOpIndex = findAppOpIndex(target);
-        if (intentIndex < 0 || appOpIndex < 0) {
-            Logs.w("FCM: broadcastIntentLocked argument layout unknown", null);
+        if (intentIndex < 0) {
+            Logs.w("FCM: broadcastIntentLocked has no Intent argument: "
+                    + target.toGenericString(), null);
             return;
         }
         Logs.i("FCM: broadcast target=" + target.getDeclaringClass().getName()
                 + "#broadcastIntentLocked intentIndex=" + intentIndex
-                + " appOpIndex=" + appOpIndex);
+                + " appOpIndex=" + appOpIndex
+                + " params=" + java.util.Arrays.toString(target.getParameterTypes()));
         final Class<?> declaring = target.getDeclaringClass();
         xposed.hook(target)
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
@@ -111,14 +113,17 @@ final class FcmSystemHooks {
                                 + " action=" + intent.getAction());
                         return chain.proceed();
                     }
-                    int appOp = (Integer) chain.getArg(appOpIndex);
                     Object[] args = chain.getArgs().toArray();
-                    if (appOp == -1) {
-                        args[appOpIndex] = 11; // AppOpsManager.OP_WAKE_LOCK
+                    if (appOpIndex >= 0) {
+                        int appOp = (Integer) chain.getArg(appOpIndex);
+                        if (appOp == -1) {
+                            args[appOpIndex] = 11; // AppOpsManager.OP_WAKE_LOCK
+                        }
                     }
                     intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
                     Logs.i("FCM: wake stopped app " + targetPackage
-                            + " via " + declaring.getSimpleName());
+                            + " via " + declaring.getSimpleName()
+                            + " appOpIndex=" + appOpIndex);
                     return chain.proceed(args);
                 });
         Logs.i("FCM: hooked " + declaring.getName() + "#broadcastIntentLocked");
@@ -373,6 +378,32 @@ final class FcmSystemHooks {
         }
         Object intent = Reflect.getField(record, "intent");
         return intent instanceof Intent ? (Intent) intent : null;
+    }
+
+    private static Method findBroadcastIntentLocked(Class<?> type) {
+        if (type == null) {
+            return null;
+        }
+        Method bestWithIntent = null;
+        Method best = null;
+        for (Method method : type.getDeclaredMethods()) {
+            if (!method.getName().equals("broadcastIntentLocked")) {
+                continue;
+            }
+            if (best == null || method.getParameterCount() > best.getParameterCount()) {
+                best = method;
+            }
+            if (findIntentIndex(method) >= 0
+                    && (bestWithIntent == null
+                    || method.getParameterCount() > bestWithIntent.getParameterCount())) {
+                bestWithIntent = method;
+            }
+        }
+        Method result = bestWithIntent != null ? bestWithIntent : best;
+        if (result != null) {
+            result.setAccessible(true);
+        }
+        return result;
     }
 
     private static Method findMethodWithMostParams(Class<?> type, String name) {
