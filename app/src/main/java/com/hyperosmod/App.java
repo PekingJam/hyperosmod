@@ -88,4 +88,8 @@ public final class App extends Application implements XposedServiceHelper.OnServ
             return Collections.emptyList();
         }
     }
+
+    public static boolean isInScope(String packageName) {
+        return currentScope().contains(packageName);
+    }
 }

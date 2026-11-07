@@ -197,7 +197,19 @@ public final class MainActivity extends AppCompatActivity {
         binding.rowFcmKeep.getRoot().setEnabled(enabled);
         binding.rowFcmKeep.getRoot().setAlpha(enabled ? 1f : 0.45f);
         binding.rowFcmKeep.switchView.setEnabled(enabled);
-        binding.fcmHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
+
+        if (!enabled) {
+            binding.fcmHint.setVisibility(View.GONE);
+            return;
+        }
+        binding.fcmHint.setVisibility(View.VISIBLE);
+        if (targets.isEmpty()) {
+            binding.fcmHint.setText(R.string.fcm_targets_missing);
+        } else if (!App.isInScope("system") || !App.isInScope("com.miui.powerkeeper")) {
+            binding.fcmHint.setText(R.string.fcm_scope_missing);
+        } else {
+            binding.fcmHint.setText(R.string.fcm_hint);
+        }
     }
 
     private void checkPermissions() {

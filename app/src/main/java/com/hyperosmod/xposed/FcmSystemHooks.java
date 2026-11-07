@@ -33,6 +33,8 @@ final class FcmSystemHooks {
     }
 
     void install() {
+        Logs.i("FCM: installing system hooks (enabled=" + enabled()
+                + ", targets=" + HookPrefs.getStringSet(Keys.FCM_TARGETS).size() + ")");
         try {
             hookBroadcastController();
         } catch (Throwable t) {
@@ -79,6 +81,9 @@ final class FcmSystemHooks {
             Logs.w("FCM: broadcastIntentLocked argument layout unknown", null);
             return;
         }
+        Logs.i("FCM: broadcast target=" + target.getDeclaringClass().getName()
+                + "#broadcastIntentLocked intentIndex=" + intentIndex
+                + " appOpIndex=" + appOpIndex);
         final Class<?> declaring = target.getDeclaringClass();
         xposed.hook(target)
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
@@ -92,7 +97,13 @@ final class FcmSystemHooks {
                     }
                     Intent intent = (Intent) arg;
                     if ((intent.getFlags() & Intent.FLAG_INCLUDE_STOPPED_PACKAGES) != 0
-                            || !isFcmTarget(intent)) {
+                            || !isFcmAction(intent.getAction())) {
+                        return chain.proceed();
+                    }
+                    String targetPackage = targetOf(intent);
+                    if (!targetAllowed(targetPackage)) {
+                        Logs.i("FCM: skip unselected target=" + targetPackage
+                                + " action=" + intent.getAction());
                         return chain.proceed();
                     }
                     int appOp = (Integer) chain.getArg(appOpIndex);
@@ -101,7 +112,7 @@ final class FcmSystemHooks {
                         args[appOpIndex] = 11; // AppOpsManager.OP_WAKE_LOCK
                     }
                     intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
-                    Logs.i("FCM: wake stopped app " + targetOf(intent)
+                    Logs.i("FCM: wake stopped app " + targetPackage
                             + " via " + declaring.getSimpleName());
                     return chain.proceed(args);
                 });
@@ -115,24 +126,27 @@ final class FcmSystemHooks {
     private void hookHyperOsAutoStart() {
         Class<?> modernStub = Reflect.findClass(classLoader,
                 "com.android.server.am.BroadcastQueueModernStubImpl");
-        hookRecordGate(modernStub, "checkApplicationAutoStart", true);
-        hookRecordGate(modernStub, "checkReceiverIfRestricted", false);
+        // HyperOS may not expose the original action at these two gates; fcmfix allows
+        // any intent for a user-selected package here, so mirror that behaviour.
+        hookRecordGate(modernStub, "checkApplicationAutoStart", true, false);
+        hookRecordGate(modernStub, "checkReceiverIfRestricted", false, true);
 
         Class<?> autoStart = Reflect.findClass(classLoader,
                 "com.android.server.am.AutoStartManagerServiceStubImpl");
-        hookIntentGate(autoStart, "isAllowStartService", true);
+        hookIntentGate(autoStart, "isAllowStartService", true, false);
 
         Class<?> smartPower = Reflect.findClass(classLoader,
                 "com.android.server.am.SmartPowerService");
-        hookRecordGate(smartPower, "shouldInterceptBroadcast", false);
+        hookRecordGate(smartPower, "shouldInterceptBroadcast", false, true);
 
         Class<?> smartPolicy = Reflect.findClass(classLoader,
                 "com.miui.server.smartpower.SmartPowerPolicyManager");
-        hookIntentGate(smartPolicy, "shouldInterceptService", false);
+        hookIntentGate(smartPolicy, "shouldInterceptService", false, true);
     }
 
     /** Methods whose relevant argument is a BroadcastRecord-like object with an intent field. */
-    private void hookRecordGate(Class<?> type, String methodName, boolean allowValue) {
+    private void hookRecordGate(Class<?> type, String methodName, boolean allowValue,
+                                boolean requireFcm) {
         if (type == null) {
             return;
         }
@@ -149,9 +163,12 @@ final class FcmSystemHooks {
                             return chain.proceed();
                         }
                         Intent intent = intentFromRecordArgs(chain.getArgs());
-                        if (isFcmTarget(intent)) {
+                        if (intent != null
+                                && (requireFcm
+                                ? isFcmTarget(intent)
+                                : targetAllowed(targetOf(intent)))) {
                             Logs.i("FCM: " + type.getSimpleName() + "#" + methodName
-                                    + " -> " + allowValue);
+                                    + " -> " + allowValue + " for " + targetOf(intent));
                             return allowValue;
                         }
                         return chain.proceed();
@@ -160,7 +177,8 @@ final class FcmSystemHooks {
     }
 
     /** Methods with an Intent argument (or a record containing one). */
-    private void hookIntentGate(Class<?> type, String methodName, boolean allowValue) {
+    private void hookIntentGate(Class<?> type, String methodName, boolean allowValue,
+                                boolean requireFcm) {
         if (type == null) {
             return;
         }
@@ -177,9 +195,12 @@ final class FcmSystemHooks {
                             return chain.proceed();
                         }
                         Intent intent = intentFromArgs(chain.getArgs());
-                        if (isFcmTarget(intent)) {
+                        if (intent != null
+                                && (requireFcm
+                                ? isFcmTarget(intent)
+                                : targetAllowed(targetOf(intent)))) {
                             Logs.i("FCM: " + type.getSimpleName() + "#" + methodName
-                                    + " -> " + allowValue);
+                                    + " -> " + allowValue + " for " + targetOf(intent));
                             return allowValue;
                         }
                         return chain.proceed();
@@ -386,11 +407,7 @@ final class FcmSystemHooks {
                 return i;
             }
         }
-        // Android 16 BroadcastController: (..., Intent, ..., int appOp, Bundle, ...)
-        if (types.length > 13 && types[13] == int.class) {
-            return 13;
-        }
-        // Last int before the Bundle options is the next-best heuristic.
+
         int bundleIndex = -1;
         for (int i = 0; i < types.length; i++) {
             if (types[i] == android.os.Bundle.class) {
@@ -398,6 +415,22 @@ final class FcmSystemHooks {
                 break;
             }
         }
+
+        // Android 16 signature: (..., String[] excludedPackages, int appOp, Bundle, ...)
+        // Find the last String[] before the options Bundle, then the int right after it.
+        int lastStringArray = -1;
+        int limit = bundleIndex > 0 ? bundleIndex : types.length;
+        for (int i = 0; i < limit; i++) {
+            if (types[i] == String[].class) {
+                lastStringArray = i;
+            }
+        }
+        if (lastStringArray >= 0 && lastStringArray + 1 < types.length
+                && types[lastStringArray + 1] == int.class) {
+            return lastStringArray + 1;
+        }
+
+        // Last int before the Bundle options is the next-best heuristic.
         if (bundleIndex > 0 && types[bundleIndex - 1] == int.class) {
             return bundleIndex - 1;
         }
@@ -424,3 +457,4 @@ final class FcmSystemHooks {
         return -1;
     }
 }
+

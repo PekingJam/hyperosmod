@@ -80,7 +80,9 @@
     <string name="fcm_targets_summary">已选择 %1$d 个应用</string>
     <string name="fcm_keep_title">停止应用时保留通知</string>
     <string name="fcm_keep_summary">阻止系统在应用被停止时自动清除其通知</string>
-    <string name="fcm_hint">需在 LSPosed 中勾选 system 与 com.miui.powerkeeper；目标应用也需要勾选。修改目标或开关后，建议重启目标应用。</string>
+    <string name="fcm_hint">需在 LSPosed 中勾选 system 与 com.miui.powerkeeper；目标应用也需要勾选。修改后建议重启目标应用/设备。若仍无效，请在 LSPosed 日志中过滤 HyperOSMod 查看 FCM 日志。</string>
+    <string name="fcm_targets_missing">尚未选择推送目标应用。请先在“推送目标应用”中勾选需要接收 FCM 的应用。</string>
+    <string name="fcm_scope_missing">LSPosed 作用域缺少 system 或 com.miui.powerkeeper，FCM 修复不会生效。请在 LSPosed 中勾选这两个作用域并重启设备。</string>
     <string name="fcm_targets_picker_title">选择 FCM 目标应用</string>
 
     <string name="app_list_permission_title">需要应用列表权限</string>
@@ -121,4 +123,5 @@
     <string name="system_app_badge">系统</string>
     <string name="loading_apps">正在加载应用列表…</string>
 </resources>
+
 
