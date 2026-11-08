@@ -20,6 +20,7 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -32,6 +33,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -88,6 +90,16 @@ final class DualSignalHook {
             Collections.synchronizedMap(new WeakHashMap<>());
     private final Map<View, SavedState> hiddenStates = new WeakHashMap<>();
     private final Map<ViewGroup, View> injectedViews = new WeakHashMap<>();
+
+    /**
+     * 已装上 pre-draw 守卫的视图 → 监听器。SystemUI 在每次状态栏重排（例如麦克风/相机隐私
+     * 指示器绿点出现或消失）时会重新设置这些视图的 visibility 和 LayoutParams，把压制状态
+     * 冲掉，原生信号图标就带着 5G 文字从自定义图标底下冒出来。守卫在每帧绘制前再压一次，
+     * 直到 {@link #restoreHidden()} 明确解除。
+     */
+    private final Map<View, ViewTreeObserver.OnPreDrawListener> guards =
+            Collections.synchronizedMap(new IdentityHashMap<>());
+    private long guardRestores;
 
     private volatile Tint tint = Tint.unknown();
     private volatile boolean receiverRegistered;
@@ -671,9 +683,11 @@ final class DualSignalHook {
             hide(findByIdName(anchor, "mobile_signal"));
         }
         hide(typeSmall);
-        // The big 5G/4G TextView can be briefly re-shown by SystemUI while the status bar
-        // re-lays out around the privacy dot. Detach it instead of only hiding it.
-        detachView(typeSingle);
+        // The big 5G/4G TextView gets re-shown by SystemUI while the status bar re-lays out
+        // around the privacy dot. Detaching it used to fail too: once detached the system can
+        // simply add it back and we would no longer be watching it. Hide it through the same
+        // guarded path instead, so the per-frame guard keeps it suppressed.
+        hide(typeSingle);
         custom.bringToFront();
 
         // Collapse the other SIM view in the same status bar only. The keyguard and the
@@ -914,22 +928,133 @@ final class DualSignalHook {
             saved = SavedState.capture(view);
             hiddenStates.put(view, saved);
         }
-        view.setAlpha(0f);
-        view.setVisibility(View.GONE);
+        applyHidden(view);
+        installGuard(view);
+    }
+
+    /**
+     * 把视图压回"不可见且不占位"，幂等：系统在任意一次重排里都可能把 visibility 或
+     * LayoutParams 改回来，所以要能随时再调一次。
+     *
+     * <p>用 {@link View#INVISIBLE} 而不是 {@link View#GONE}：GONE 会让父容器重新测量布局，
+     * 系统反而更容易把尺寸改回去；INVISIBLE 保留槽位，配合 1px 尺寸在视觉上同样不可见，
+     * 但不需要父容器重排。1px 而不是 0：ConstraintLayout 里 0dp 等于 MATCH_CONSTRAINT，
+     * 写 0 会把视图撑开。</p>
+     */
+    private boolean applyHidden(View view) {
+        boolean changed = false;
+        if (view.getAlpha() != 0f) {
+            view.setAlpha(0f);
+            changed = true;
+        }
+        if (view.getVisibility() != View.INVISIBLE) {
+            view.setVisibility(View.INVISIBLE);
+            changed = true;
+        }
         ViewGroup.LayoutParams params = view.getLayoutParams();
-        if (params != null && (params.width != 1 || params.height != 1)) {
-            params.width = 1;
-            params.height = 1;
-            if (params instanceof ViewGroup.MarginLayoutParams) {
-                ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+        if (params == null) {
+            return changed;
+        }
+        boolean needs = params.width != 1 || params.height != 1;
+        if (params instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+            boolean marginsDirty = margins.leftMargin != 0 || margins.topMargin != 0
+                    || margins.rightMargin != 0 || margins.bottomMargin != 0
+                    || margins.getMarginStart() != 0 || margins.getMarginEnd() != 0;
+            if (marginsDirty) {
                 margins.leftMargin = 0;
                 margins.topMargin = 0;
                 margins.rightMargin = 0;
                 margins.bottomMargin = 0;
                 margins.setMarginStart(0);
                 margins.setMarginEnd(0);
+                needs = true;
             }
+        }
+        if (needs) {
+            params.width = 1;
+            params.height = 1;
             view.setLayoutParams(params);
+            changed = true;
+        }
+        return changed;
+    }
+
+    /**
+     * 给视图装一个"每帧绘制前重新压制"的守卫。状态栏围绕隐私绿点重排时，系统会在我们的
+     * hide() 之后把 visibility 设回 VISIBLE，普通的一次性隐藏挡不住。OnPreDrawListener 在
+     * 所有测量/布局/绘制之前回调，每次都能把状态顶回去，而且不依赖任何 HyperOS 内部类名。
+     */
+    private void installGuard(final View view) {
+        if (guards.containsKey(view)) {
+            return;
+        }
+        ViewTreeObserver.OnPreDrawListener listener = () -> {
+            try {
+                if (hiddenStates.containsKey(view) && applyHidden(view)) {
+                    guardRestores++;
+                    if (guardRestores <= 3 || guardRestores % 50 == 0) {
+                        Logs.i("dual-row: guard re-hid " + describe(view)
+                                + " (total " + guardRestores + ")");
+                    }
+                }
+            } catch (Throwable t) {
+                Logs.w("dual-row: visibility guard failed", t);
+            }
+            return true;
+        };
+        try {
+            view.getViewTreeObserver().addOnPreDrawListener(listener);
+            guards.put(view, listener);
+            // ViewTreeObserver 实例会随 attach/detach 更换，重新挂上时补装一次。
+            view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View attached) {
+                    ViewTreeObserver.OnPreDrawListener stale = guards.remove(attached);
+                    if (stale != null) {
+                        try {
+                            attached.getViewTreeObserver().removeOnPreDrawListener(stale);
+                        } catch (Throwable ignored) {
+                            // The old observer is gone with the previous window attachment.
+                        }
+                    }
+                    installGuard(attached);
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(View detached) {
+                    // Reinstalled on the next attach.
+                }
+            });
+        } catch (Throwable t) {
+            Logs.w("dual-row: unable to install visibility guard", t);
+        }
+    }
+
+    private static String describe(View view) {
+        if (view == null) {
+            return "null";
+        }
+        try {
+            int id = view.getId();
+            if (id != View.NO_ID) {
+                return view.getContext().getResources().getResourceEntryName(id);
+            }
+        } catch (Throwable ignored) {
+            // Fall through to the class name.
+        }
+        return view.getClass().getSimpleName();
+    }
+
+    private void removeGuard(View view) {
+        ViewTreeObserver.OnPreDrawListener listener = guards.remove(view);
+        if (listener == null) {
+            return;
+        }
+        try {
+            view.getViewTreeObserver().removeOnPreDrawListener(listener);
+        } catch (Throwable ignored) {
+            // The observer may already be gone with the window attachment.
         }
     }
 
@@ -968,6 +1093,11 @@ final class DualSignalHook {
     }
 
     private void restoreHidden() {
+        // Drop the per-frame guards first, otherwise the view would be hidden again
+        // immediately after we restore it.
+        for (View guarded : new ArrayList<>(guards.keySet())) {
+            removeGuard(guarded);
+        }
         Map<ViewGroup, List<SavedState>> detached = new LinkedHashMap<>();
         for (SavedState saved : hiddenStates.values()) {
             if (saved.detachedFrom != null) {
