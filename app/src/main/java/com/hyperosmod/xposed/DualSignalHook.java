@@ -661,15 +661,20 @@ final class DualSignalHook {
             injectedViews.put(anchor, custom);
         }
 
+        View typeSingle = findByIdName(anchor, "mobile_type_single");
+        View typeSmall = findByIdName(anchor, "mobile_type");
         if (mobileGroup != null && signalContainer != null) {
             // The custom container replaces the whole official signal area, including its
             // private type icon and activity indicator.
             hide(signalContainer);
         } else {
             hide(findByIdName(anchor, "mobile_signal"));
-            hide(findByIdName(anchor, "mobile_type"));
         }
-        hide(findByIdName(anchor, "mobile_type_single"));
+        hide(typeSmall);
+        // The big 5G/4G TextView can be briefly re-shown by SystemUI while the status bar
+        // re-lays out around the privacy dot. Detach it instead of only hiding it.
+        detachView(typeSingle);
+        custom.bringToFront();
 
         // Collapse the other SIM view in the same status bar only. The keyguard and the
         // main status bar each have their own mobile group, and both must show the icon.
@@ -940,7 +945,54 @@ final class DualSignalHook {
         restoreHidden();
     }
 
+    private void detachView(View view) {
+        if (view == null) {
+            return;
+        }
+        SavedState saved = hiddenStates.get(view);
+        if (saved == null) {
+            saved = SavedState.capture(view);
+            hiddenStates.put(view, saved);
+        }
+        android.view.ViewParent parent = view.getParent();
+        if (!(parent instanceof ViewGroup)) {
+            hide(view);
+            return;
+        }
+        if (saved.detachedFrom == null) {
+            saved.detachedFrom = (ViewGroup) parent;
+            saved.detachedIndex = saved.detachedFrom.indexOfChild(view);
+            saved.detachedParams = view.getLayoutParams();
+        }
+        ((ViewGroup) parent).removeView(view);
+    }
+
     private void restoreHidden() {
+        Map<ViewGroup, List<SavedState>> detached = new LinkedHashMap<>();
+        for (SavedState saved : hiddenStates.values()) {
+            if (saved.detachedFrom != null) {
+                detached.computeIfAbsent(saved.detachedFrom, key -> new ArrayList<>()).add(saved);
+            }
+        }
+        for (Map.Entry<ViewGroup, List<SavedState>> group : detached.entrySet()) {
+            group.getValue().sort((left, right) ->
+                    Integer.compare(left.detachedIndex, right.detachedIndex));
+            for (SavedState saved : group.getValue()) {
+                if (saved.view == null || saved.view.getParent() != null) {
+                    continue;
+                }
+                int index = Math.min(saved.detachedIndex, group.getKey().getChildCount());
+                try {
+                    if (saved.detachedParams != null) {
+                        group.getKey().addView(saved.view, index, saved.detachedParams);
+                    } else {
+                        group.getKey().addView(saved.view, index);
+                    }
+                } catch (Throwable ignored) {
+                    // The old parent may be detached; the new status bar will rebind.
+                }
+            }
+        }
         for (Map.Entry<View, SavedState> entry : hiddenStates.entrySet()) {
             View view = entry.getKey();
             SavedState saved = entry.getValue();
@@ -1261,6 +1313,7 @@ final class DualSignalHook {
     }
 
     private static final class SavedState {
+        View view;
         int width;
         int height;
         int leftMargin;
@@ -1271,9 +1324,13 @@ final class DualSignalHook {
         int marginEnd;
         float alpha;
         int visibility;
+        ViewGroup detachedFrom;
+        int detachedIndex;
+        ViewGroup.LayoutParams detachedParams;
 
         static SavedState capture(View view) {
             SavedState state = new SavedState();
+            state.view = view;
             state.alpha = view.getAlpha();
             state.visibility = view.getVisibility();
             ViewGroup.LayoutParams params = view.getLayoutParams();
