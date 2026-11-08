@@ -25,5 +25,8 @@ Thumbs.db
 _ref/
 _tools/
 
+# Locally built APK output
+dist/
+
 # Kotlin/Gradle local state
 .kotlin/
