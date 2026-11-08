@@ -5,8 +5,9 @@ This project is licensed under the GNU Affero General Public License v3.0 (see `
 The SystemUI hook rules for:
 
 - lock-screen notification restriction removal,
-- keeping notifications after unlock, and
-- the custom Monet theme color
+- keeping notifications after unlock,
+- the custom Monet theme color, and
+- the dual-row mobile signal icon layout
 
 are derived from [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler), Copyright (C) 2023-2026 HyperCeiler Contributions, licensed under AGPL-3.0.
 

@@ -1,9 +1,31 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
 
-val releaseKeystore = rootProject.file("keystore.jks")
+val signingPropertiesFile = rootProject.file("signing.properties")
+val signingProperties = Properties().apply {
+    if (signingPropertiesFile.exists()) {
+        signingPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(environment: String, property: String): String {
+    val fromEnvironment = System.getenv(environment)
+    if (!fromEnvironment.isNullOrBlank()) {
+        return fromEnvironment
+    }
+    return signingProperties.getProperty(property).orEmpty()
+}
+
+val releaseKeystore = rootProject.file(
+    signingProperties.getProperty("storeFile", "keystore.jks")
+)
 val hasReleaseKeystore = releaseKeystore.exists()
+val releaseStorePassword = signingValue("KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("KEY_PASSWORD", "keyPassword")
 
 android {
     namespace = "com.hyperosmod"
@@ -15,8 +37,8 @@ android {
         applicationId = "com.hyperosmod"
         minSdk = 34
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.3.8"
+        versionCode = 20
+        versionName = "1.4.6"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -37,9 +59,9 @@ android {
         if (hasReleaseKeystore) {
             create("release") {
                 storeFile = releaseKeystore
-                storePassword = System.getenv("KEYSTORE_PASSWORD").orEmpty()
-                keyAlias = System.getenv("KEY_ALIAS").orEmpty()
-                keyPassword = System.getenv("KEY_PASSWORD").orEmpty()
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true

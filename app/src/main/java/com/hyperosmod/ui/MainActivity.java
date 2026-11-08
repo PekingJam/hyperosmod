@@ -16,6 +16,7 @@ import com.hyperosmod.Keys;
 import com.hyperosmod.R;
 import com.hyperosmod.data.Prefs;
 import com.hyperosmod.databinding.ActivityMainBinding;
+import com.hyperosmod.databinding.RowSliderBinding;
 import com.hyperosmod.databinding.RowSwitchBinding;
 
 import java.util.Locale;
@@ -44,6 +45,7 @@ public final class MainActivity extends AppCompatActivity {
 
         bindLockScreenRows();
         bindThemeRows();
+        bindStatusBarRows();
         bindUpdateRows();
         bindDndRows();
         bindTelephonyRows();
@@ -106,6 +108,90 @@ public final class MainActivity extends AppCompatActivity {
                 updateThemeRow();
             });
         });
+    }
+
+    private void bindStatusBarRows() {
+        bindSwitch(binding.rowDualSignal, Keys.DUAL_ROW_SIGNAL,
+                R.string.dual_signal_title, R.string.dual_signal_summary);
+        binding.rowDualSignal.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.DUAL_ROW_SIGNAL, checked);
+            updateDualSignalRows();
+        });
+        bindSliderRow(binding.rowDualSignalScale,
+                R.string.dual_signal_scale_title,
+                R.string.dual_signal_scale_summary,
+                Keys.DUAL_SIGNAL_SCALE,
+                Keys.DUAL_SIGNAL_SCALE_MIN,
+                Keys.DUAL_SIGNAL_SCALE_MAX,
+                Keys.DUAL_SIGNAL_SCALE_DEFAULT);
+        bindSliderRow(binding.rowDualSignalThickness,
+                R.string.dual_signal_thickness_title,
+                R.string.dual_signal_thickness_summary,
+                Keys.DUAL_SIGNAL_THICKNESS,
+                Keys.DUAL_SIGNAL_THICKNESS_MIN,
+                Keys.DUAL_SIGNAL_THICKNESS_MAX,
+                Keys.DUAL_SIGNAL_THICKNESS_DEFAULT);
+        bindSliderRow(binding.rowDualTextScale,
+                R.string.dual_text_scale_title,
+                R.string.dual_text_scale_summary,
+                Keys.DUAL_TEXT_SCALE,
+                Keys.DUAL_TEXT_SCALE_MIN,
+                Keys.DUAL_TEXT_SCALE_MAX,
+                Keys.DUAL_TEXT_SCALE_DEFAULT);
+        bindSliderRow(binding.rowDualTextThickness,
+                R.string.dual_text_thickness_title,
+                R.string.dual_text_thickness_summary,
+                Keys.DUAL_TEXT_THICKNESS,
+                Keys.DUAL_TEXT_THICKNESS_MIN,
+                Keys.DUAL_TEXT_THICKNESS_MAX,
+                Keys.DUAL_TEXT_THICKNESS_DEFAULT);
+    }
+
+    private void bindSliderRow(RowSliderBinding row, int title, int summary, String key,
+                               int min, int max, int defaultValue) {
+        row.title.setText(title);
+        row.slider.setValueFrom(min);
+        row.slider.setValueTo(max);
+        row.slider.setStepSize(5);
+        int value = clamp(Prefs.getInt(key, defaultValue), min, max);
+        row.slider.setValue(value);
+        row.summary.setText(getString(summary, value));
+        row.slider.addOnChangeListener((slider, current, fromUser) -> {
+            int rounded = Math.round(current);
+            row.summary.setText(getString(summary, rounded));
+            if (fromUser) {
+                Prefs.setInt(key, rounded);
+            }
+        });
+    }
+
+    private void updateDualSignalRows() {
+        boolean enabled = Prefs.getBoolean(Keys.DUAL_ROW_SIGNAL, false);
+        binding.dualSignalHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        float alpha = enabled ? 1f : 0.45f;
+        binding.rowDualSignalScale.getRoot().setAlpha(alpha);
+        binding.rowDualSignalScale.slider.setEnabled(enabled);
+        binding.rowDualSignalThickness.getRoot().setAlpha(alpha);
+        binding.rowDualSignalThickness.slider.setEnabled(enabled);
+        binding.rowDualTextScale.getRoot().setAlpha(alpha);
+        binding.rowDualTextScale.slider.setEnabled(enabled);
+        binding.rowDualTextThickness.getRoot().setAlpha(alpha);
+        binding.rowDualTextThickness.slider.setEnabled(enabled);
+    }
+
+    private void updateDualSignalValues() {
+        binding.rowDualSignalScale.slider.setValue(clamp(
+                Prefs.getInt(Keys.DUAL_SIGNAL_SCALE, Keys.DUAL_SIGNAL_SCALE_DEFAULT),
+                Keys.DUAL_SIGNAL_SCALE_MIN, Keys.DUAL_SIGNAL_SCALE_MAX));
+        binding.rowDualSignalThickness.slider.setValue(clamp(
+                Prefs.getInt(Keys.DUAL_SIGNAL_THICKNESS, Keys.DUAL_SIGNAL_THICKNESS_DEFAULT),
+                Keys.DUAL_SIGNAL_THICKNESS_MIN, Keys.DUAL_SIGNAL_THICKNESS_MAX));
+        binding.rowDualTextScale.slider.setValue(clamp(
+                Prefs.getInt(Keys.DUAL_TEXT_SCALE, Keys.DUAL_TEXT_SCALE_DEFAULT),
+                Keys.DUAL_TEXT_SCALE_MIN, Keys.DUAL_TEXT_SCALE_MAX));
+        binding.rowDualTextThickness.slider.setValue(clamp(
+                Prefs.getInt(Keys.DUAL_TEXT_THICKNESS, Keys.DUAL_TEXT_THICKNESS_DEFAULT),
+                Keys.DUAL_TEXT_THICKNESS_MIN, Keys.DUAL_TEXT_THICKNESS_MAX));
     }
 
     private void bindUpdateRows() {
@@ -255,6 +341,10 @@ public final class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private void bindSwitch(RowSwitchBinding row, String key, int title, int summary) {
         bindSwitch(row, key, title, summary, false);
     }
@@ -275,6 +365,8 @@ public final class MainActivity extends AppCompatActivity {
                 Prefs.getBoolean(Keys.KEEP_NOTIFICATION, false));
         binding.rowCustomTheme.switchView.setChecked(
                 Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false));
+        binding.rowDualSignal.switchView.setChecked(
+                Prefs.getBoolean(Keys.DUAL_ROW_SIGNAL, false));
         binding.rowBlockUpdates.switchView.setChecked(
                 Prefs.getBoolean(Keys.BLOCK_UPDATES_ENABLED, false));
         binding.rowTelephonyEnabled.switchView.setChecked(
@@ -285,6 +377,8 @@ public final class MainActivity extends AppCompatActivity {
                 Prefs.getBoolean(Keys.FCM_KEEP_NOTIFICATION, true));
 
         updateThemeRow();
+        updateDualSignalValues();
+        updateDualSignalRows();
         updateBlockedAppsRow();
         updateDndRow();
         updateTelephonyRows();

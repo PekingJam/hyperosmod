@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HyperOS Mod</string>
-    <string name="xposed_description">解锁锁屏通知限制、解锁后保留通知、自定义主题色，并阻止指定应用被更新。</string>
+    <string name="xposed_description">解锁锁屏通知限制、解锁后保留通知、自定义主题色、双排信号图标，并阻止指定应用被更新。</string>
 
     <string name="status_title">模块状态</string>
     <string name="status_active">已连接 LSPosed</string>
@@ -13,6 +13,7 @@
 
     <string name="section_lockscreen">系统界面 · 锁屏</string>
     <string name="section_theme">系统界面 · 主题</string>
+    <string name="section_statusbar">系统界面 · 状态栏</string>
     <string name="section_updates">应用更新保护</string>
     <string name="section_mifitness">小米运动健康</string>
     <string name="section_telephony">电话 / SIM 信息</string>
@@ -29,6 +30,18 @@
     <string name="theme_color_title">主题颜色</string>
     <string name="theme_color_default">跟随壁纸</string>
     <string name="theme_color_restart_hint">修改后通常立即生效；若未生效，请重启系统界面。</string>
+
+    <string name="dual_signal_title">双排信号图标</string>
+    <string name="dual_signal_summary">双卡时将主卡阶梯信号与副卡圆点信号竖向堆叠，并在前方显示当前数据卡的 5G / 4G 类型</string>
+    <string name="dual_signal_hint">仅双卡时生效；可拖动下方滑块分别调整图标大小/粗细和 5G / 4G 文本大小/粗细。关闭后恢复官方横向排列；若切换后状态栏没有变化，可点击下方“重启系统界面”。</string>
+    <string name="dual_signal_scale_title">信号图标大小</string>
+    <string name="dual_signal_scale_summary">当前 %1$d%%，只调整信号图标大小</string>
+    <string name="dual_signal_thickness_title">信号条粗细</string>
+    <string name="dual_signal_thickness_summary">当前 %1$d%%，拖动调整信号条/圆点粗细</string>
+    <string name="dual_text_scale_title">5G / 4G 文本大小</string>
+    <string name="dual_text_scale_summary">当前 %1$d%%，只调整网络类型文本大小</string>
+    <string name="dual_text_thickness_title">5G / 4G 文本粗细</string>
+    <string name="dual_text_thickness_summary">当前 %1$d%%，只调整网络类型文本字重</string>
 
     <string name="block_updates_title">阻止应用更新</string>
     <string name="block_updates_summary">在系统安装阶段拒绝所选应用的更新，安装新应用不受影响</string>
