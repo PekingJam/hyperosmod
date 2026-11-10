@@ -209,6 +209,16 @@
                         android:background="?attr/colorOutlineVariant" />
 
                     <include
+                        android:id="@+id/row_clock_seconds"
+                        layout="@layout/row_switch" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="18dp"
+                        android:background="?attr/colorOutlineVariant" />
+
+                    <include
                         android:id="@+id/row_dual_signal_scale"
                         layout="@layout/row_slider" />
 

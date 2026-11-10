@@ -32,16 +32,19 @@
     <string name="theme_color_restart_hint">修改后通常立即生效；若未生效，请重启系统界面。</string>
 
     <string name="dual_signal_title">双排信号图标</string>
-    <string name="dual_signal_summary">双卡时将主卡阶梯信号与副卡圆点信号竖向堆叠，并在前方显示当前数据卡的 5G / 4G 类型</string>
-    <string name="dual_signal_hint">仅双卡时生效；可拖动下方滑块分别调整图标大小/粗细和 5G / 4G 文本大小/粗细。关闭后恢复官方横向排列；若切换后状态栏没有变化，可点击下方“重启系统界面”。</string>
+    <string name="dual_signal_summary">双卡时把两张卡的信号竖向叠成两排圆点，并在前方显示当前数据卡的 5G / 4G 类型</string>
+    <string name="dual_signal_hint">仅双卡时生效。上排是数据主卡，下排是副卡，每排四颗圆点：列位严格对齐、两排半径一致、行距在不粘连的前提下尽量窄（粗细调大时间距会自动跟着放大）。下方滑块可调整圆点大小与粗细。关闭后恢复官方横向排列；若切换后状态栏没有变化，可点击下方“重启系统界面”。</string>
     <string name="dual_signal_scale_title">信号图标大小</string>
-    <string name="dual_signal_scale_summary">当前 %1$d%%，只调整信号图标大小</string>
-    <string name="dual_signal_thickness_title">信号条粗细</string>
-    <string name="dual_signal_thickness_summary">当前 %1$d%%，拖动调整信号条/圆点粗细</string>
+    <string name="dual_signal_scale_summary">当前 %1$d%%，按主题图标尺寸等比缩放</string>
+    <string name="dual_signal_thickness_title">信号图标粗细</string>
+    <string name="dual_signal_thickness_summary">当前 %1$d%%，在主题图标基础上横向加粗 / 变窄</string>
     <string name="dual_text_scale_title">5G / 4G 文本大小</string>
     <string name="dual_text_scale_summary">当前 %1$d%%，只调整网络类型文本大小</string>
     <string name="dual_text_thickness_title">5G / 4G 文本粗细</string>
     <string name="dual_text_thickness_summary">当前 %1$d%%，只调整网络类型文本字重</string>
+
+    <string name="clock_seconds_title">状态栏时钟显示秒</string>
+    <string name="clock_seconds_summary">在状态栏时钟后追加秒数，按当前 12 / 24 小时制自动排版</string>
 
     <string name="block_updates_title">阻止应用更新</string>
     <string name="block_updates_summary">在系统安装阶段拒绝所选应用的更新，安装新应用不受影响</string>

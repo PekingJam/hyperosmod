@@ -41,6 +41,9 @@ public final class Keys {
     public static final int DUAL_TEXT_THICKNESS_MAX = 200;
     public static final int DUAL_TEXT_THICKNESS_DEFAULT = 100;
 
+    /** SystemUI: show seconds in the status bar clock. */
+    public static final String CLOCK_SECONDS = "status_bar_clock_seconds";
+
     /** system_server: reject updates of the packages in {@link #BLOCKED_PACKAGES}. */
     public static final String BLOCK_UPDATES_ENABLED = "block_updates_enabled";
     /** Set&lt;String&gt; of package names whose updates must be rejected. */

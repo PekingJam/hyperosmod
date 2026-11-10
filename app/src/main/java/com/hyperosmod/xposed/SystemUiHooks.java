@@ -51,6 +51,11 @@ final class SystemUiHooks {
         } catch (Throwable t) {
             Logs.e("Failed to install dual-row signal hooks", t);
         }
+        try {
+            new ClockSecondsHook(xposed, classLoader).install();
+        } catch (Throwable t) {
+            Logs.e("Failed to install clock-seconds hooks", t);
+        }
     }
 
     /**

@@ -7,9 +7,11 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.telephony.SignalStrength;
@@ -82,24 +84,22 @@ final class DualSignalHook {
     private final Map<Integer, Integer> levelBySubId = new ConcurrentHashMap<>();
     private final Map<Integer, Boolean> dataSimBySubId = new ConcurrentHashMap<>();
     private final Map<Integer, String> typeBySubId = new ConcurrentHashMap<>();
-    private final Map<String, Integer> resourceIds = new ConcurrentHashMap<>();
+    private final IconFinder icons = new IconFinder();
+    /** 每颗 SIM 视图的「主题图标快照」，避免每次信号刷新都重新克隆一遍 Drawable。 */
+    private final Map<ViewGroup, IconSnapshot> iconCache =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    /** 参考高度还没量到时的重试哨兵，避免每个刷新周期都挂一个延迟任务。 */
+    private final AtomicBoolean referenceRetryPending = new AtomicBoolean();
+    private final StatusBarMetrics metrics = new StatusBarMetrics();
+    /** 压制、守卫、还原都交给它；本类只负责判断「该藏哪些视图」。 */
+    private final ViewSuppressor suppressor = new ViewSuppressor();
 
     private final Map<View, Object> typeFlows =
             Collections.synchronizedMap(new WeakHashMap<>());
     private final Map<View, Object> tintFlows =
             Collections.synchronizedMap(new WeakHashMap<>());
-    private final Map<View, SavedState> hiddenStates = new WeakHashMap<>();
     private final Map<ViewGroup, View> injectedViews = new WeakHashMap<>();
 
-    /**
-     * 已装上 pre-draw 守卫的视图 → 监听器。SystemUI 在每次状态栏重排（例如麦克风/相机隐私
-     * 指示器绿点出现或消失）时会重新设置这些视图的 visibility 和 LayoutParams，把压制状态
-     * 冲掉，原生信号图标就带着 5G 文字从自定义图标底下冒出来。守卫在每帧绘制前再压一次，
-     * 直到 {@link #restoreHidden()} 明确解除。
-     */
-    private final Map<View, ViewTreeObserver.OnPreDrawListener> guards =
-            Collections.synchronizedMap(new IdentityHashMap<>());
-    private long guardRestores;
 
     private volatile Tint tint = Tint.unknown();
     private volatile boolean receiverRegistered;
@@ -613,7 +613,7 @@ final class DualSignalHook {
                     Keys.DUAL_TEXT_THICKNESS_MIN, Keys.DUAL_TEXT_THICKNESS_MAX);
 
             for (ViewGroup anchor : anchors) {
-                applyDualIcon(anchor, type, dataLevel, otherLevel,
+                applyDualIcon(anchor, dataSub, otherSub, type, dataLevel, otherLevel,
                         scale, thickness, textScale, textThickness);
             }
         } catch (Throwable t) {
@@ -621,13 +621,14 @@ final class DualSignalHook {
         }
     }
 
-    private void applyDualIcon(ViewGroup anchor, String type, int dataLevel, int otherLevel,
+    private void applyDualIcon(ViewGroup anchor, int dataSub, int otherSub,
+                               String type, int dataLevel, int otherLevel,
                                int scale, int thickness, int textScale, int textThickness) {
         Context context = anchor.getContext();
-        View signalContainerView = findByIdName(anchor, "mobile_signal_container");
+        View signalContainerView = icons.byName(anchor, "mobile_signal_container");
         ViewGroup signalContainer = signalContainerView instanceof ViewGroup
                 ? (ViewGroup) signalContainerView : null;
-        View mobileGroupView = findByIdName(anchor, "mobile_group");
+        View mobileGroupView = icons.byName(anchor, "mobile_group");
         ViewGroup mobileGroup = mobileGroupView instanceof ViewGroup
                 ? (ViewGroup) mobileGroupView : null;
 
@@ -673,39 +674,85 @@ final class DualSignalHook {
             injectedViews.put(anchor, custom);
         }
 
-        View typeSingle = findByIdName(anchor, "mobile_type_single");
-        View typeSmall = findByIdName(anchor, "mobile_type");
+        View typeSingle = icons.byName(anchor, "mobile_type_single");
+        View typeSmall = icons.byName(anchor, "mobile_type");
         if (mobileGroup != null && signalContainer != null) {
             // The custom container replaces the whole official signal area, including its
             // private type icon and activity indicator.
-            hide(signalContainer);
+            suppressor.hide(signalContainer);
         } else {
-            hide(findByIdName(anchor, "mobile_signal"));
+            suppressor.hide(icons.byName(anchor, "mobile_signal"));
         }
-        hide(typeSmall);
+        suppressor.hide(typeSmall);
         // The big 5G/4G TextView gets re-shown by SystemUI while the status bar re-lays out
         // around the privacy dot. Detaching it used to fail too: once detached the system can
         // simply add it back and we would no longer be watching it. Hide it through the same
         // guarded path instead, so the per-frame guard keeps it suppressed.
-        hide(typeSingle);
+        suppressor.hide(typeSingle);
         custom.bringToFront();
 
         // Collapse the other SIM view in the same status bar only. The keyguard and the
         // main status bar each have their own mobile group, and both must show the icon.
+        // 顺手把同一组里的两颗 SIM 视图找出来：下面要拿它们各自的主题图标。
         ViewGroup parent = anchor.getParent() instanceof ViewGroup
                 ? (ViewGroup) anchor.getParent() : null;
+        ViewGroup dataSimView = null;
+        ViewGroup otherSimView = null;
+        Integer anchorSub = mobileViews.get(anchor);
+        if (anchorSub != null) {
+            if (anchorSub == dataSub) {
+                dataSimView = anchor;
+            } else if (anchorSub == otherSub) {
+                otherSimView = anchor;
+            }
+        }
         if (parent != null) {
             for (Map.Entry<ViewGroup, Integer> entry : mobileViews.entrySet()) {
                 ViewGroup other = entry.getKey();
-                if (other != anchor && other.getParent() == parent) {
-                    hide(other);
+                if (other == anchor || other.getParent() != parent) {
+                    continue;
                 }
+                Integer sub = entry.getValue();
+                if (sub != null && sub == dataSub) {
+                    dataSimView = other;
+                } else if (sub != null && sub == otherSub) {
+                    otherSimView = other;
+                }
+                suppressor.hide(other);
             }
         }
 
         DualSignalView view = (DualSignalView) custom;
         view.setScale(scale, thickness, textScale, textThickness);
         view.setState(type, dataLevel, otherLevel, resolveColor(anchor));
+
+        // 主题兼容：不自己画图标，直接沿用系统为这两颗 SIM 画出来的那张 drawable
+        // （小米主题 com.android.systemui 模块里的 stat_sys_signal_*），只缩成一半高度叠两行。
+        Drawable topIcon = copyThemeIcon(dataSimView);
+        Drawable bottomIcon = copyThemeIcon(otherSimView);
+        boolean tintIcons = usesImageTint(dataSimView) || usesImageTint(otherSimView);
+        StatusBarMetrics.IconBox box = metrics.resolve(context,
+                topIcon != null ? topIcon : bottomIcon, anchor);
+        view.setThemeIcons(topIcon, bottomIcon, tintIcons,
+                box.width, box.height, metrics.rowGap(context, box.height));
+
+        // 整块高度以隔壁电池/WiFi 图标的实测高度为准。dimen 只决定宽度比例，
+        // 拿它当高度会让双排比电池高出三成——那是用户第一眼就能看出来的问题。
+        int reference = referenceIconHeight(anchor, parent);
+        if (reference > 0) {
+            if (view.setReferenceHeight(reference)) {
+                Logs.i("dual-row: 双排总高对齐参考图标 height=" + reference + "px");
+                // 量完尺寸再打一行实际生效值，方便对不上时直接抄日志。
+                view.post(() -> Logs.i("dual-row: 双排实际 viewH=" + view.getHeight()
+                        + "px baseH=" + box.height + "px"));
+            }
+        } else if (referenceRetryPending.compareAndSet(false, true)) {
+            // 首次 bind 时兄弟视图可能还没量过尺寸，稍后再量一次（只挂一次）。
+            mainHandler.postDelayed(() -> {
+                referenceRetryPending.set(false);
+                scheduleRefresh();
+            }, 700L);
+        }
     }
 
     private ViewGroup firstAttachedView() {
@@ -850,7 +897,7 @@ final class DualSignalHook {
     }
 
     private String typeFromOfficialView(View anchor) {
-        View typeSingle = findByIdName(anchor, "mobile_type_single");
+        View typeSingle = icons.byName(anchor, "mobile_type_single");
         if (typeSingle instanceof TextView) {
             CharSequence text = ((TextView) typeSingle).getText();
             if (text != null) {
@@ -860,7 +907,7 @@ final class DualSignalHook {
                 }
             }
         }
-        View typeSmall = findByIdName(anchor, "mobile_type");
+        View typeSmall = icons.byName(anchor, "mobile_type");
         if (typeSmall instanceof ImageView) {
             Object drawable = ((ImageView) typeSmall).getDrawable();
             Object value = Reflect.getField(drawable, "mMobileType");
@@ -881,19 +928,19 @@ final class DualSignalHook {
     }
 
     private int anchorColor(View anchor) {
-        View typeSingle = findByIdName(anchor, "mobile_type_single");
+        View typeSingle = icons.byName(anchor, "mobile_type_single");
         if (typeSingle instanceof TextView) {
             int color = ((TextView) typeSingle).getCurrentTextColor();
             if (Color.alpha(color) != 0) {
                 return color;
             }
         }
-        View type = findByIdName(anchor, "mobile_type");
+        View type = icons.byName(anchor, "mobile_type");
         int color = filterColor(type);
         if (color != 0) {
             return color;
         }
-        return filterColor(findByIdName(anchor, "mobile_signal"));
+        return filterColor(icons.byName(anchor, "mobile_signal"));
     }
 
     private int filterColor(View view) {
@@ -919,145 +966,6 @@ final class DualSignalHook {
     // View management
     // ==================================================================================
 
-    private void hide(View view) {
-        if (view == null) {
-            return;
-        }
-        SavedState saved = hiddenStates.get(view);
-        if (saved == null) {
-            saved = SavedState.capture(view);
-            hiddenStates.put(view, saved);
-        }
-        applyHidden(view);
-        installGuard(view);
-    }
-
-    /**
-     * 把视图压回"不可见且不占位"，幂等：系统在任意一次重排里都可能把 visibility 或
-     * LayoutParams 改回来，所以要能随时再调一次。
-     *
-     * <p>用 {@link View#INVISIBLE} 而不是 {@link View#GONE}：GONE 会让父容器重新测量布局，
-     * 系统反而更容易把尺寸改回去；INVISIBLE 保留槽位，配合 1px 尺寸在视觉上同样不可见，
-     * 但不需要父容器重排。1px 而不是 0：ConstraintLayout 里 0dp 等于 MATCH_CONSTRAINT，
-     * 写 0 会把视图撑开。</p>
-     */
-    private boolean applyHidden(View view) {
-        boolean changed = false;
-        if (view.getAlpha() != 0f) {
-            view.setAlpha(0f);
-            changed = true;
-        }
-        if (view.getVisibility() != View.INVISIBLE) {
-            view.setVisibility(View.INVISIBLE);
-            changed = true;
-        }
-        ViewGroup.LayoutParams params = view.getLayoutParams();
-        if (params == null) {
-            return changed;
-        }
-        boolean needs = params.width != 1 || params.height != 1;
-        if (params instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
-            boolean marginsDirty = margins.leftMargin != 0 || margins.topMargin != 0
-                    || margins.rightMargin != 0 || margins.bottomMargin != 0
-                    || margins.getMarginStart() != 0 || margins.getMarginEnd() != 0;
-            if (marginsDirty) {
-                margins.leftMargin = 0;
-                margins.topMargin = 0;
-                margins.rightMargin = 0;
-                margins.bottomMargin = 0;
-                margins.setMarginStart(0);
-                margins.setMarginEnd(0);
-                needs = true;
-            }
-        }
-        if (needs) {
-            params.width = 1;
-            params.height = 1;
-            view.setLayoutParams(params);
-            changed = true;
-        }
-        return changed;
-    }
-
-    /**
-     * 给视图装一个"每帧绘制前重新压制"的守卫。状态栏围绕隐私绿点重排时，系统会在我们的
-     * hide() 之后把 visibility 设回 VISIBLE，普通的一次性隐藏挡不住。OnPreDrawListener 在
-     * 所有测量/布局/绘制之前回调，每次都能把状态顶回去，而且不依赖任何 HyperOS 内部类名。
-     */
-    private void installGuard(final View view) {
-        if (guards.containsKey(view)) {
-            return;
-        }
-        ViewTreeObserver.OnPreDrawListener listener = () -> {
-            try {
-                if (hiddenStates.containsKey(view) && applyHidden(view)) {
-                    guardRestores++;
-                    if (guardRestores <= 3 || guardRestores % 50 == 0) {
-                        Logs.i("dual-row: guard re-hid " + describe(view)
-                                + " (total " + guardRestores + ")");
-                    }
-                }
-            } catch (Throwable t) {
-                Logs.w("dual-row: visibility guard failed", t);
-            }
-            return true;
-        };
-        try {
-            view.getViewTreeObserver().addOnPreDrawListener(listener);
-            guards.put(view, listener);
-            // ViewTreeObserver 实例会随 attach/detach 更换，重新挂上时补装一次。
-            view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-                @Override
-                public void onViewAttachedToWindow(View attached) {
-                    ViewTreeObserver.OnPreDrawListener stale = guards.remove(attached);
-                    if (stale != null) {
-                        try {
-                            attached.getViewTreeObserver().removeOnPreDrawListener(stale);
-                        } catch (Throwable ignored) {
-                            // The old observer is gone with the previous window attachment.
-                        }
-                    }
-                    installGuard(attached);
-                }
-
-                @Override
-                public void onViewDetachedFromWindow(View detached) {
-                    // Reinstalled on the next attach.
-                }
-            });
-        } catch (Throwable t) {
-            Logs.w("dual-row: unable to install visibility guard", t);
-        }
-    }
-
-    private static String describe(View view) {
-        if (view == null) {
-            return "null";
-        }
-        try {
-            int id = view.getId();
-            if (id != View.NO_ID) {
-                return view.getContext().getResources().getResourceEntryName(id);
-            }
-        } catch (Throwable ignored) {
-            // Fall through to the class name.
-        }
-        return view.getClass().getSimpleName();
-    }
-
-    private void removeGuard(View view) {
-        ViewTreeObserver.OnPreDrawListener listener = guards.remove(view);
-        if (listener == null) {
-            return;
-        }
-        try {
-            view.getViewTreeObserver().removeOnPreDrawListener(listener);
-        } catch (Throwable ignored) {
-            // The observer may already be gone with the window attachment.
-        }
-    }
-
     private void restoreAll() {
         if (!injectedViews.isEmpty()) {
             for (View custom : new ArrayList<>(injectedViews.values())) {
@@ -1067,140 +975,120 @@ final class DualSignalHook {
             }
             injectedViews.clear();
         }
-        restoreHidden();
+        suppressor.restoreHidden();
     }
 
-    private void detachView(View view) {
-        if (view == null) {
-            return;
-        }
-        SavedState saved = hiddenStates.get(view);
-        if (saved == null) {
-            saved = SavedState.capture(view);
-            hiddenStates.put(view, saved);
-        }
-        android.view.ViewParent parent = view.getParent();
-        if (!(parent instanceof ViewGroup)) {
-            hide(view);
-            return;
-        }
-        if (saved.detachedFrom == null) {
-            saved.detachedFrom = (ViewGroup) parent;
-            saved.detachedIndex = saved.detachedFrom.indexOfChild(view);
-            saved.detachedParams = view.getLayoutParams();
-        }
-        ((ViewGroup) parent).removeView(view);
-    }
-
-    private void restoreHidden() {
-        // Drop the per-frame guards first, otherwise the view would be hidden again
-        // immediately after we restore it.
-        for (View guarded : new ArrayList<>(guards.keySet())) {
-            removeGuard(guarded);
-        }
-        Map<ViewGroup, List<SavedState>> detached = new LinkedHashMap<>();
-        for (SavedState saved : hiddenStates.values()) {
-            if (saved.detachedFrom != null) {
-                detached.computeIfAbsent(saved.detachedFrom, key -> new ArrayList<>()).add(saved);
+    /** 同一状态栏行里电池 / WiFi 图标的实测高度，作为双排图标的总高标尺。 */
+    private int referenceIconHeight(ViewGroup anchor, ViewGroup parent) {
+        String[] candidates = {"battery", "battery_icon", "battery_text_view", "wifi", "wifi_signal"};
+        for (String name : candidates) {
+            View candidate = parent != null ? icons.byName(parent, name) : null;
+            if (candidate == null) {
+                candidate = icons.byName(anchor, name);
+            }
+            if (candidate != null && candidate.getHeight() > 0) {
+                return candidate.getHeight();
             }
         }
-        for (Map.Entry<ViewGroup, List<SavedState>> group : detached.entrySet()) {
-            group.getValue().sort((left, right) ->
-                    Integer.compare(left.detachedIndex, right.detachedIndex));
-            for (SavedState saved : group.getValue()) {
-                if (saved.view == null || saved.view.getParent() != null) {
-                    continue;
-                }
-                int index = Math.min(saved.detachedIndex, group.getKey().getChildCount());
-                try {
-                    if (saved.detachedParams != null) {
-                        group.getKey().addView(saved.view, index, saved.detachedParams);
-                    } else {
-                        group.getKey().addView(saved.view, index);
-                    }
-                } catch (Throwable ignored) {
-                    // The old parent may be detached; the new status bar will rebind.
-                }
-            }
-        }
-        for (Map.Entry<View, SavedState> entry : hiddenStates.entrySet()) {
-            View view = entry.getKey();
-            SavedState saved = entry.getValue();
-            ViewGroup.LayoutParams params = view.getLayoutParams();
-            if (params != null) {
-                params.width = saved.width;
-                params.height = saved.height;
-                if (params instanceof ViewGroup.MarginLayoutParams) {
-                    ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
-                    margins.leftMargin = saved.leftMargin;
-                    margins.topMargin = saved.topMargin;
-                    margins.rightMargin = saved.rightMargin;
-                    margins.bottomMargin = saved.bottomMargin;
-                    margins.setMarginStart(saved.marginStart);
-                    margins.setMarginEnd(saved.marginEnd);
-                }
-                view.setLayoutParams(params);
-            }
-            view.setAlpha(saved.alpha);
-            view.setVisibility(saved.visibility);
-        }
-        hiddenStates.clear();
+        return 0;
     }
 
-    private View findByIdName(View root, String name) {
-        if (root == null) {
+    // ==================================================================================
+    // Theme icon hand-off
+    // ==================================================================================
+
+    /**
+     * 复制这颗 SIM 当前显示的那张信号图标。
+     *
+     * <p>系统已经把主题里的 {@code stat_sys_signal_N} 绑到这个 ImageView 上，并算好了等级、
+     * tint、透明度，所以复制它等于「原样沿用主题的粗细与留白」，不管用户换哪套主题都不会
+     * 失真。{@code constantState} 可能为 null（少数自定义 Drawable），那就用当前实例画，
+     * 只是不再拥有独立的可变状态。</p>
+     */
+    private Drawable copyThemeIcon(ViewGroup simView) {
+        ImageView image = signalImageView(simView);
+        if (image == null) {
             return null;
         }
-        int id = idFor(root.getContext(), name);
-        if (id == 0) {
+        Drawable source = image.getDrawable();
+        if (source == null) {
             return null;
         }
-        return findById(root, id);
+        // 信号强度每秒都可能刷新，ImageView 的 drawable 也可能随等级换新；只有源对象
+        // 变了才重新克隆，否则直接复用上一份，别给 SystemUI 添 GC 压力。
+        IconSnapshot cached = iconCache.get(simView);
+        if (cached != null && cached.source == source) {
+            return cached.copy;
+        }
+        Drawable copy = null;
+        try {
+            android.graphics.drawable.Drawable.ConstantState state = source.getConstantState();
+            if (state != null) {
+                copy = state.newDrawable(image.getResources(), image.getContext().getTheme());
+            }
+        } catch (Throwable t) {
+            Logs.w("Dual-signal: unable to clone the theme drawable", t);
+        }
+        if (copy == null) {
+            copy = source;
+        } else {
+            copy = copy.mutate();
+        }
+        ColorStateList tintList = image.getImageTintList();
+        if (tintList != null) {
+            copy.setTintList(tintList);
+        }
+        copy.setAlpha(image.getImageAlpha());
+        iconCache.put(simView, new IconSnapshot(source, copy));
+        return copy;
     }
 
-    private static View findById(View root, int id) {
-        if (root == null) {
+    /** 一颗 SIM 图标在某个时刻的源 Drawable 与它的副本。 */
+    private static final class IconSnapshot {
+        final Drawable source;
+        final Drawable copy;
+
+        IconSnapshot(Drawable source, Drawable copy) {
+            this.source = source;
+            this.copy = copy;
+        }
+    }
+
+    /** 这颗 SIM 的图标是否由系统 tint 上色（多色主题图通常没有 tintList，要保持原色）。 */
+    private boolean usesImageTint(ViewGroup simView) {
+        ImageView image = signalImageView(simView);
+        return image != null && image.getImageTintList() != null;
+    }
+
+    /** 系统信号图标所在的 ImageView：先按 id 找 mobile_signal，再退到子树里第一个 ImageView。 */
+    private ImageView signalImageView(ViewGroup simView) {
+        if (simView == null) {
             return null;
         }
-        if (root.getId() == id) {
-            return root;
+        View byId = icons.byName(simView, "mobile_signal");
+        if (byId instanceof ImageView) {
+            return (ImageView) byId;
         }
-        if (root instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) root;
+        return firstImageView(simView, 0);
+    }
+
+    private ImageView firstImageView(View view, int depth) {
+        if (view == null || depth > 4) {
+            return null;
+        }
+        if (view instanceof ImageView) {
+            return (ImageView) view;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {
-                View found = findById(group.getChildAt(i), id);
+                ImageView found = firstImageView(group.getChildAt(i), depth + 1);
                 if (found != null) {
                     return found;
                 }
             }
         }
         return null;
-    }
-
-    @SuppressLint("DiscouragedApi")
-    private int idFor(Context context, String name) {
-        String packageName = context.getPackageName();
-        String key = packageName + ':' + name;
-        Integer cached = resourceIds.get(key);
-        if (cached != null) {
-            return cached;
-        }
-        int id = 0;
-        try {
-            Resources resources = context.getResources();
-            id = resources.getIdentifier(name, "id", packageName);
-        } catch (Throwable ignored) {
-            // Try the framework package below.
-        }
-        if (id == 0) {
-            try {
-                id = context.getResources().getIdentifier(name, "id", "android");
-            } catch (Throwable ignored) {
-                // Leave as zero.
-            }
-        }
-        resourceIds.put(key, id);
-        return id;
     }
 
     // ==================================================================================
@@ -1442,42 +1330,4 @@ final class DualSignalHook {
         }
     }
 
-    private static final class SavedState {
-        View view;
-        int width;
-        int height;
-        int leftMargin;
-        int topMargin;
-        int rightMargin;
-        int bottomMargin;
-        int marginStart;
-        int marginEnd;
-        float alpha;
-        int visibility;
-        ViewGroup detachedFrom;
-        int detachedIndex;
-        ViewGroup.LayoutParams detachedParams;
-
-        static SavedState capture(View view) {
-            SavedState state = new SavedState();
-            state.view = view;
-            state.alpha = view.getAlpha();
-            state.visibility = view.getVisibility();
-            ViewGroup.LayoutParams params = view.getLayoutParams();
-            if (params != null) {
-                state.width = params.width;
-                state.height = params.height;
-                if (params instanceof ViewGroup.MarginLayoutParams) {
-                    ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
-                    state.leftMargin = margins.leftMargin;
-                    state.topMargin = margins.topMargin;
-                    state.rightMargin = margins.rightMargin;
-                    state.bottomMargin = margins.bottomMargin;
-                    state.marginStart = margins.getMarginStart();
-                    state.marginEnd = margins.getMarginEnd();
-                }
-            }
-            return state;
-        }
-    }
 }

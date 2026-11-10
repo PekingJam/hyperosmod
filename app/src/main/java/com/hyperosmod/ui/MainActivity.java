@@ -117,6 +117,8 @@ public final class MainActivity extends AppCompatActivity {
             Prefs.setBoolean(Keys.DUAL_ROW_SIGNAL, checked);
             updateDualSignalRows();
         });
+        bindSwitch(binding.rowClockSeconds, Keys.CLOCK_SECONDS,
+                R.string.clock_seconds_title, R.string.clock_seconds_summary);
         bindSliderRow(binding.rowDualSignalScale,
                 R.string.dual_signal_scale_title,
                 R.string.dual_signal_scale_summary,
