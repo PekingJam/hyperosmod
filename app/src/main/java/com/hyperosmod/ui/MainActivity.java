@@ -381,6 +381,7 @@ public final class MainActivity extends AppCompatActivity {
         updateThemeRow();
         updateDualSignalValues();
         updateDualSignalRows();
+        pruneUninstalledTargets();
         updateBlockedAppsRow();
         updateDndRow();
         updateTelephonyRows();
@@ -398,6 +399,26 @@ public final class MainActivity extends AppCompatActivity {
         binding.rowThemeColor.colorDot.setBackgroundTintList(ColorStateList.valueOf(color));
         binding.rowThemeColor.summary.setText(
                 String.format(Locale.ROOT, "#%06X", color & 0xFFFFFF));
+    }
+
+    /**
+     * 三个「按包名勾选」的名单（阻止更新、伪装目标、FCM 目标）都要清理已卸载应用的残留
+     * 包名：不然主界面一直显示「已选 N 个」，进列表却只能看到 N-1 个勾，用户既取消不了
+     * 也解释不了。
+     */
+    private void pruneUninstalledTargets() {
+        pruneOne(Keys.BLOCKED_PACKAGES);
+        pruneOne(Keys.TELEPHONY_TARGETS);
+        pruneOne(Keys.FCM_TARGETS);
+    }
+
+    private void pruneOne(String key) {
+        Set<String> current = Prefs.getStringSet(key);
+        Set<String> pruned = PackagePruner.prune(getPackageManager(), current);
+        // prune() 在没有任何条目被移除时会原样返回入参，用引用相等判断就不必多写一次盘。
+        if (pruned != current) {
+            Prefs.setStringSet(key, pruned);
+        }
     }
 
     private void updateBlockedAppsRow() {

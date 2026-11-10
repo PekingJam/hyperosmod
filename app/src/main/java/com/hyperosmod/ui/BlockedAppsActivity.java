@@ -107,7 +107,6 @@ public final class BlockedAppsActivity extends AppCompatActivity {
 
         binding.clearAll.setOnClickListener(v -> confirmClearAll());
         binding.selectedCount.setText(getString(countStringRes(), adapter.selectedCount()));
-
         permissionMissing = !PermissionHelper.hasAppListAccess(this);
         if (permissionMissing) {
             showPermissionDialog();
@@ -154,10 +153,20 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         binding.loading.setVisibility(View.VISIBLE);
         binding.empty.setVisibility(View.GONE);
         executor.execute(() -> {
-            List<AppEntry> entries = readInstalledApps(selectedPackages);
+            // 勾选名单里可能残留已卸载应用的包名：先剔掉，再据此生成列表，
+            // 否则「已选 N 个」永远比列表里能看到的勾选多，用户还不能取消。
+            Set<String> pruned = PackagePruner.prune(getPackageManager(), selectedPackages);
+            boolean changed = pruned != selectedPackages;
+            List<AppEntry> entries = readInstalledApps(pruned);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) {
                     return;
+                }
+                if (changed) {
+                    selectedPackages = new HashSet<>(pruned);
+                    Prefs.setStringSet(storeKey, pruned);
+                    adapter.syncSelection(pruned);
+                    binding.selectedCount.setText(getString(countStringRes(), pruned.size()));
                 }
                 adapter.submit(entries);
                 binding.loading.setVisibility(View.GONE);

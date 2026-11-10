@@ -68,6 +68,20 @@ public final class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.Ho
         notifyDataSetChanged();
     }
 
+    /**
+     * 用新集合替换当前勾选（用于清理已卸载应用的残留包名）。
+     *
+     * <p>只更新本地状态，不回调 {@link SelectionListener}：调用方已经负责把结果写回
+     * 偏好设置，再回调一次会形成「写—读—写」的回环。</p>
+     */
+    public void syncSelection(Set<String> packages) {
+        selected.clear();
+        if (packages != null) {
+            selected.addAll(packages);
+        }
+        notifyDataSetChanged();
+    }
+
     private void applyFilter() {
         visible.clear();
         for (AppEntry entry : all) {
