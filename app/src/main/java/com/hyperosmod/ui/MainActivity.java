@@ -7,6 +7,8 @@ import android.view.View;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.core.content.ContextCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -18,6 +20,9 @@ import com.hyperosmod.data.Prefs;
 import com.hyperosmod.databinding.ActivityMainBinding;
 import com.hyperosmod.databinding.RowSliderBinding;
 import com.hyperosmod.databinding.RowSwitchBinding;
+import com.hyperosmod.singbox.SingBoxFragment;
+import com.hyperosmod.singbox.TileEntryActivity;
+import com.hyperosmod.singbox.SingBoxWebFragment;
 
 import java.util.Locale;
 import java.util.Set;
@@ -51,6 +56,12 @@ public final class MainActivity extends AppCompatActivity {
         bindTelephonyRows();
         bindFcmRows();
 
+        binding.bottomNav.setOnItemSelectedListener(item -> {
+            showPage(item.getItemId());
+            return true;
+        });
+        routeFromIntent(getIntent());
+
         binding.footer.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
         binding.buttonRestart.setOnClickListener(v -> restartSystemUi());
     }
@@ -68,6 +79,28 @@ public final class MainActivity extends AppCompatActivity {
         super.onStop();
     }
 
+    /** 从磁贴长按进来时，按 extra 直接落到对应 tab；正常启动则停在状态栏。 */
+    private void routeFromIntent(Intent intent) {
+        int tab = intent == null ? -1
+                : intent.getIntExtra(TileEntryActivity.EXTRA_TAB, -1);
+        int target;
+        if (tab == TileEntryActivity.TAB_WEB) {
+            target = R.id.tab_web;
+        } else if (tab == TileEntryActivity.TAB_PANEL) {
+            target = R.id.tab_singbox;
+        } else {
+            target = R.id.tab_statusbar;
+        }
+        binding.bottomNav.setSelectedItemId(target);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        routeFromIntent(intent);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -80,6 +113,37 @@ public final class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         executor.shutdownNow();
         super.onDestroy();
+    }
+
+    /**
+     * 底部导航：状态栏 / 系统 共用滚动区；sing-box 与网页各是一块 fragment 容器，
+     * 首次切到对应 tab 时才创建，避免启动时就把 WebView 和 root 调用拉起来。
+     */
+    private void showPage(int itemId) {
+        boolean scroll = itemId == R.id.tab_statusbar || itemId == R.id.tab_system;
+        binding.scrollContent.setVisibility(scroll ? View.VISIBLE : View.GONE);
+        binding.pageStatusbar.setVisibility(
+                itemId == R.id.tab_statusbar ? View.VISIBLE : View.GONE);
+        binding.pageSystem.setVisibility(itemId == R.id.tab_system ? View.VISIBLE : View.GONE);
+        binding.pageSingbox.setVisibility(itemId == R.id.tab_singbox ? View.VISIBLE : View.GONE);
+        binding.pageWeb.setVisibility(itemId == R.id.tab_web ? View.VISIBLE : View.GONE);
+        if (itemId == R.id.tab_singbox) {
+            ensureFragment(R.id.container_singbox, SingBoxFragment::new, "singbox");
+        } else if (itemId == R.id.tab_web) {
+            ensureFragment(R.id.container_web, SingBoxWebFragment::new, "web");
+        }
+        binding.scrollContent.scrollTo(0, 0);
+    }
+
+    private void ensureFragment(int containerId, java.util.function.Supplier<Fragment> factory,
+                                String tag) {
+        FragmentManager manager = getSupportFragmentManager();
+        if (manager.findFragmentByTag(tag) != null) {
+            return;
+        }
+        manager.beginTransaction()
+                .add(containerId, factory.get(), tag)
+                .commitAllowingStateLoss();
     }
 
     private void bindLockScreenRows() {

@@ -14,6 +14,15 @@ public final class Keys {
     public static final String UNLOCK_NOTIFICATION_RESTRICT = "unlock_notification_restrict";
     /** SystemUI: keep keyguard notifications after unlocking. */
     public static final String KEEP_NOTIFICATION = "keep_notification";
+    /** sing-box：磁贴长按打开应用时优先显示网页。 */
+    public static final String SINGBOX_TILE_WEB = "singbox_tile_web";
+    /** sing-box：网页面板地址（磁贴长按 / 面板里的「打开网页」都用它）。 */
+    public static final String SINGBOX_WEB_URL = "singbox_web_url";
+    /** sing-box：配置文件下载地址（面板里可改，脚本会自己记住）。 */
+    public static final String SINGBOX_CONFIG_URL = "singbox_config_url";
+    /** sing-box：WebView 缓存策略，0=默认 1=缓存优先 2=不走缓存。 */
+    public static final String SINGBOX_WEB_CACHE = "singbox_web_cache";
+
     /** 桌面（com.miui.home）：双击手势提示线直接锁屏。 */
     public static final String GESTURE_LINE_LOCK = "gesture_line_lock";
     /** SystemUI: override the Monet seed color. */

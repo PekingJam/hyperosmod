@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    网页面板允许明文 HTTP。
+    典型场景是 sing-box 的本地控制台（http://127.0.0.1:9090 之类）或路由器/局域网设备，
+    这些地址没有 TLS 证书，Android 从 targetSdk 28 起默认拦截，会报 ERR_CLEARTEXT_NOT_PERMITTED。
+    只对本应用生效，不影响系统和其它应用。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
