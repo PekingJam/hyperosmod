@@ -14,6 +14,8 @@ public final class Keys {
     public static final String UNLOCK_NOTIFICATION_RESTRICT = "unlock_notification_restrict";
     /** SystemUI: keep keyguard notifications after unlocking. */
     public static final String KEEP_NOTIFICATION = "keep_notification";
+    /** 桌面（com.miui.home）：双击手势提示线直接锁屏。 */
+    public static final String GESTURE_LINE_LOCK = "gesture_line_lock";
     /** SystemUI: override the Monet seed color. */
     public static final String CUSTOM_THEME_ENABLED = "custom_theme_enabled";
     /** SystemUI: ARGB seed color used when {@link #CUSTOM_THEME_ENABLED} is on. */

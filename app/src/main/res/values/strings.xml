@@ -31,6 +31,11 @@
     <string name="theme_color_default">跟随壁纸</string>
     <string name="theme_color_restart_hint">修改后通常立即生效；若未生效，请重启系统界面。</string>
 
+
+    <string name="gesture_line_lock_title">双击手势提示线锁屏</string>
+    <string name="gesture_line_lock_summary">在全屏手势模式下双击底部那条提示线即可锁屏，不用再按电源键</string>
+    <string name="gesture_line_lock_scope_missing">桌面（com.miui.home）还没加入本模块的 LSPosed 作用域，请在 LSPosed 里勾选「系统桌面」后重启桌面，否则此功能不会生效</string>
+
     <string name="dual_signal_title">双排信号图标</string>
     <string name="dual_signal_summary">双卡时把两张卡的信号竖向叠成两排圆点，并在前方显示当前数据卡的 5G / 4G 类型</string>
     <string name="dual_signal_hint">仅双卡时生效。上排是数据主卡，下排是副卡，每排四颗圆点：列位严格对齐、两排半径一致、行距在不粘连的前提下尽量窄（粗细调大时间距会自动跟着放大）。下方滑块可调整圆点大小与粗细。关闭后恢复官方横向排列；若切换后状态栏没有变化，可点击下方“重启系统界面”。</string>

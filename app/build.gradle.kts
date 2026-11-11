@@ -37,8 +37,8 @@ android {
         applicationId = "com.hyperosmod"
         minSdk = 34
         targetSdk = 36
-        versionCode = 24
-        versionName = "1.4.10"
+        versionCode = 33
+        versionName = "1.4.19"
 
         ndk {
             abiFilters += "arm64-v8a"

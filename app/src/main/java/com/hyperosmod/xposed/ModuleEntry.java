@@ -50,6 +50,14 @@ public final class ModuleEntry extends XposedModule {
             }
             return;
         }
+        if ("com.miui.home".equals(packageName)) {
+            try {
+                new GestureLineHook(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install gesture-line hooks", t);
+            }
+            return;
+        }
         if (("com.mi.health".equals(packageName) || "com.xiaomi.wearable".equals(packageName))) {
             try {
                 new MiFitnessHooks(this, param.getClassLoader()).install();

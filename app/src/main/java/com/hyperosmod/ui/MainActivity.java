@@ -83,6 +83,16 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void bindLockScreenRows() {
+        bindSwitch(binding.rowGestureLineLock, Keys.GESTURE_LINE_LOCK,
+                R.string.gesture_line_lock_title, R.string.gesture_line_lock_summary);
+        // 手势提示线的触摸判定在桌面进程里，桌面没进作用域时这个开关等于没开，直接提示。
+        binding.rowGestureLineLock.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.GESTURE_LINE_LOCK, checked);
+            if (checked && !App.isInScope("com.miui.home")) {
+                Toast.makeText(this, R.string.gesture_line_lock_scope_missing,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
         bindSwitch(binding.rowUnlockNotification, Keys.UNLOCK_NOTIFICATION_RESTRICT,
                 R.string.unlock_notification_title, R.string.unlock_notification_summary);
         bindSwitch(binding.rowKeepNotification, Keys.KEEP_NOTIFICATION,
@@ -361,6 +371,8 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void refreshAll() {
+        binding.rowGestureLineLock.switchView.setChecked(
+                Prefs.getBoolean(Keys.GESTURE_LINE_LOCK, false));
         binding.rowUnlockNotification.switchView.setChecked(
                 Prefs.getBoolean(Keys.UNLOCK_NOTIFICATION_RESTRICT, false));
         binding.rowKeepNotification.switchView.setChecked(

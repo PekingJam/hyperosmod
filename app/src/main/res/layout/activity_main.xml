@@ -110,6 +110,16 @@
                     android:orientation="vertical">
 
                     <include
+                        android:id="@+id/row_gesture_line_lock"
+                        layout="@layout/row_switch" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="18dp"
+                        android:background="?attr/colorOutlineVariant" />
+
+                    <include
                         android:id="@+id/row_unlock_notification"
                         layout="@layout/row_switch" />
 
