@@ -2,6 +2,7 @@ package com.hyperosmod.singbox;
 
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -52,7 +53,9 @@ public final class SingBoxFragment extends Fragment {
 
     private static final int COLOR_RUNNING = Color.parseColor("#43A047");
     private static final int COLOR_STOPPED = Color.parseColor("#9E9E9E");
-    private static final int COLOR_NO_ROOT = Color.parseColor("#E53935");
+    /** root 提示：已授权用蓝、未授权用琥珀，和运行绿、停止灰都不撞色。 */
+    private static final int COLOR_ROOT_OK = Color.parseColor("#3482FF");
+    private static final int COLOR_NO_ROOT = Color.parseColor("#F5A524");
 
     @Nullable
     @Override
@@ -144,7 +147,8 @@ public final class SingBoxFragment extends Fragment {
                 binding.statusRoot.setText(root
                         ? R.string.singbox_state_ready
                         : R.string.singbox_state_no_root);
-                binding.statusRoot.setTextColor(root ? COLOR_STOPPED : COLOR_NO_ROOT);
+                binding.statusRoot.setTextColor(root ? COLOR_ROOT_OK : COLOR_NO_ROOT);
+                binding.statusRoot.setTypeface(null, Typeface.BOLD);
                 applyEnabled(root && !busy);
             });
         });

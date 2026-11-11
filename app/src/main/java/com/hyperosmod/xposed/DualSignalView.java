@@ -68,6 +68,17 @@ final class DualSignalView extends LinearLayout {
         typeView.setStrokeWidthDp((nextTextThickness - 50) / 150f * 0.9f);
     }
 
+    /**
+     * 只更新颜色，不动档位和类型。
+     *
+     * <p>状态栏图标在「下拉通知栏」时会切到深/浅色，但那一步走的是 SystemUI 的
+     * appearance 回调，不会有新的信号档位上报，所以颜色得单独同步。</p>
+     */
+    void setColor(int color) {
+        typeView.setTextColor(color);
+        iconView.setColor(color);
+    }
+
     void setState(String type, int dataLevel, int otherLevel, int color) {
         String nextType = type == null ? "" : type;
         typeView.setText(nextType);
@@ -179,6 +190,14 @@ final class DualSignalView extends LinearLayout {
             this.scalePercent = nextScale;
             this.thicknessPercent = nextThickness;
             requestLayout();
+            invalidate();
+        }
+
+        void setColor(int color) {
+            if (this.color == color) {
+                return;
+            }
+            this.color = color;
             invalidate();
         }
 

@@ -100,6 +100,17 @@ final class DualSignalHook {
             Collections.synchronizedMap(new WeakHashMap<>());
     private final Map<ViewGroup, View> injectedViews = new WeakHashMap<>();
 
+    /** 颜色同步：从原生图标现读颜色，每帧比对，变了就刷新自绘圆点。 */
+    private View colorTypeText;
+    private View colorTypeIcon;
+    private View colorSignalIcon;
+    private int colorFilterCache;
+    private int colorFilterTicks;
+    private int lastAppliedColor = Integer.MIN_VALUE;
+    private View colorGuardHost;
+    private ViewTreeObserver.OnPreDrawListener colorGuard;
+    private ViewTreeObserver colorGuardObserver;
+
 
     private volatile Tint tint = Tint.unknown();
     private volatile boolean receiverRegistered;
@@ -723,6 +734,8 @@ final class DualSignalHook {
         }
 
         DualSignalView view = (DualSignalView) custom;
+        refreshColorSources(anchor);
+        installColorGuard(view);
         view.setScale(scale, thickness, textScale, textThickness);
         view.setState(type, dataLevel, otherLevel, resolveColor(anchor));
 
@@ -918,13 +931,109 @@ final class DualSignalHook {
         return "";
     }
 
+    /**
+     * 当前该用的图标颜色。
+     *
+     * <p>优先读原生图标此刻的颜色，而不是只信任 {@code MiuiMobileIconBinder} 的 tint 流：
+     * 下拉通知栏时 SystemUI 只切 appearance（浅色/深色），不会触发 binder 的 tint 更新，
+     * 所以旧逻辑下自绘圆点会一直是下拉前的颜色。</p>
+     */
     private int resolveColor(View anchor) {
-        Tint current = tint;
-        if (current.known) {
-            return current.resolve();
+        refreshColorSources(anchor);
+        return liveColor();
+    }
+
+    private void refreshColorSources(View anchor) {
+        if (!(anchor instanceof ViewGroup)) {
+            return;
         }
-        int color = anchorColor(anchor);
-        return color != 0 ? color : Color.WHITE;
+        ViewGroup group = (ViewGroup) anchor;
+        colorTypeText = icons.byName(group, "mobile_type_single");
+        colorTypeIcon = icons.byName(group, "mobile_type");
+        colorSignalIcon = icons.byName(group, "mobile_signal");
+    }
+
+    /** 零反射的快路径是运营商标识 TextView；没有它才退回读 colorFilter。 */
+    private int liveColor() {
+        if (colorTypeText instanceof TextView) {
+            int color = ((TextView) colorTypeText).getCurrentTextColor();
+            if (Color.alpha(color) != 0) {
+                return color;
+            }
+        }
+        // 反射读 filter 有成本，每 6 帧才探一次，其余帧复用上次结果。
+        if (colorFilterTicks++ % 6 == 0) {
+            int color = filterColor(colorTypeIcon);
+            if (color == 0) {
+                color = filterColor(colorSignalIcon);
+            }
+            if (color != 0) {
+                colorFilterCache = color;
+            }
+        }
+        if (colorFilterCache != 0) {
+            return colorFilterCache;
+        }
+        Tint current = tint;
+        return current.known ? current.resolve() : Color.WHITE;
+    }
+
+    /** 每帧比对一次颜色；只在真的变了的时候重绘。 */
+    private void installColorGuard(final DualSignalView view) {
+        if (colorGuardHost == view && colorGuard != null) {
+            return;
+        }
+        removeColorGuard();
+        ViewTreeObserver.OnPreDrawListener listener = () -> {
+            try {
+                int color = liveColor();
+                if (color != lastAppliedColor) {
+                    lastAppliedColor = color;
+                    view.setColor(color);
+                    Logs.i("dual-row: 图标颜色 -> #" + String.format("%08X", color));
+                }
+            } catch (Throwable ignored) {
+                // 状态栏重排期间偶发异常，下一帧会再来一次。
+            }
+            return true;
+        };
+        try {
+            colorGuardObserver = view.getViewTreeObserver();
+            colorGuardObserver.addOnPreDrawListener(listener);
+            colorGuard = listener;
+            colorGuardHost = view;
+            // 视图重新 attach 时 ViewTreeObserver 会换实例，守卫得跟着挪过去。
+            view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View attached) {
+                    if (colorGuard != listener
+                            || colorGuardObserver != attached.getViewTreeObserver()) {
+                        removeColorGuard();
+                        installColorGuard(view);
+                    }
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(View detached) {
+                    // 下次 attach 时重装。
+                }
+            });
+        } catch (Throwable t) {
+            Logs.w("dual-row: unable to install color guard", t);
+        }
+    }
+
+    private void removeColorGuard() {
+        if (colorGuardObserver != null && colorGuard != null) {
+            try {
+                colorGuardObserver.removeOnPreDrawListener(colorGuard);
+            } catch (Throwable ignored) {
+                // observer 已随窗口分离消失。
+            }
+        }
+        colorGuard = null;
+        colorGuardHost = null;
+        colorGuardObserver = null;
     }
 
     private int anchorColor(View anchor) {
@@ -967,6 +1076,8 @@ final class DualSignalHook {
     // ==================================================================================
 
     private void restoreAll() {
+        removeColorGuard();
+        lastAppliedColor = Integer.MIN_VALUE;
         if (!injectedViews.isEmpty()) {
             for (View custom : new ArrayList<>(injectedViews.values())) {
                 if (custom != null && custom.getParent() instanceof ViewGroup) {
