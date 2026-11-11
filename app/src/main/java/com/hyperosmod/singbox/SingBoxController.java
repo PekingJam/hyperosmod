@@ -372,6 +372,63 @@ public final class SingBoxController {
     }
 
     // ==================================================================================
+    // 配置文件读写与校验
+    // ==================================================================================
+
+    /** 读取当前配置文件；不存在返回空串。 */
+    public static String readConfig() {
+        RootShell.Result result = RootShell.exec(
+                "[ -f " + CONF + " ] && cat " + CONF, 20);
+        return result.ok() ? result.output : "";
+    }
+
+    /**
+     * 把内容写进临时文件跑一次 {@code sing-box check}。
+     *
+     * @return {@code ok()==false} 时 output 就是 sing-box 的报错
+     */
+    public static RootShell.Result validate(String json) {
+        if (!exists(BINARY)) {
+            return new RootShell.Result(0, "未安装 sing-box，跳过校验");
+        }
+        String temp = WORK_DIR + "/tmp/config.check.json";
+        RootShell.exec("mkdir -p " + WORK_DIR + "/tmp", 10);
+        String encoded = android.util.Base64.encodeToString(
+                json.getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+        RootShell.Result write = RootShell.exec(
+                "echo " + encoded + " | base64 -d > " + temp, 20);
+        if (!write.ok()) {
+            return new RootShell.Result(1, "写入临时文件失败：" + write.output);
+        }
+        RootShell.Result check = RootShell.exec(
+                BINARY + " check -D " + WORK_DIR + " -c " + temp, 60);
+        RootShell.exec("rm -f " + temp, 10);
+        return check;
+    }
+
+    /** 校验通过后落盘，旧配置留一份 .bak，并按需重启服务。 */
+    public static RootShell.Result saveConfig(String json, boolean restartIfRunning) {
+        RootShell.Result check = validate(json);
+        if (!check.ok()) {
+            return new RootShell.Result(1, "配置未通过 sing-box 校验，未保存：\n" + check.output);
+        }
+        String encoded = android.util.Base64.encodeToString(
+                json.getBytes(StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+        RootShell.Result write = RootShell.exec(String.join(" && ",
+                "mkdir -p " + WORK_DIR,
+                "[ -f " + CONF + " ] && cp -f " + CONF + " " + CONF_BAK,
+                "echo " + encoded + " | base64 -d > " + CONF), 30);
+        if (!write.ok()) {
+            return new RootShell.Result(1, "写入失败：" + write.output);
+        }
+        if (restartIfRunning && currentPid() > 0) {
+            restart();
+            return new RootShell.Result(0, "已保存，服务已重启");
+        }
+        return new RootShell.Result(0, "已保存");
+    }
+
+    // ==================================================================================
     // 工具
     // ==================================================================================
 

@@ -1,61 +1,37 @@
 package com.hyperosmod.singbox;
 
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.Typeface;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import com.hyperosmod.Keys;
 import com.hyperosmod.R;
-import com.hyperosmod.data.Prefs;
 import com.hyperosmod.databinding.FragmentSingboxBinding;
 
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * sing-box 管理面板（主界面「sing-box」页与独立页面共用的实现）。
+ * sing-box 一级页面：状态、启停、日志，加二级入口。
  *
- * <p>所有耗时动作都在单线程池里顺序执行，结果与进度写到页面底部的输出区。按钮在任务期间
- * 统一禁用，避免并发操作把二进制替换到一半。</p>
+ * <p>日志刻意放在一级页面、固定高度可滚动——启动失败时第一眼就能看到原因，
+ * 不需要再点任何菜单。日志只保留尾部 200 行。</p>
  */
 public final class SingBoxFragment extends Fragment {
 
     private FragmentSingboxBinding binding;
-
-    /**
-     * 整个应用共用一个执行队列：原来是每个 Fragment 实例一个，视图重建后旧实例被
-     * shutdown，后续所有 root 调用直接抛 RejectedExecutionException，界面就会永远停在
-     * 「忙」的状态（按钮全灰、进度条一直转）。
-     */
+    /** 全局队列：视图重建后不会像实例级线程池那样被关掉。 */
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    /** 是否有任务在跑；状态刷新时据此决定按钮是否可用。 */
     private boolean busy;
-
-    /** 回填开关状态时不要触发监听，否则会把「读状态」当成「用户点击」。 */
-    private boolean suppressAutostartListener;
-
-    private static final int COLOR_RUNNING = Color.parseColor("#43A047");
-    private static final int COLOR_STOPPED = Color.parseColor("#9E9E9E");
-    /** root 提示：已授权用蓝、未授权用琥珀，和运行绿、停止灰都不撞色。 */
-    private static final int COLOR_ROOT_OK = Color.parseColor("#3482FF");
-    private static final int COLOR_NO_ROOT = Color.parseColor("#F5A524");
+    private boolean autostartListenerArmed;
 
     @Nullable
     @Override
@@ -72,32 +48,26 @@ public final class SingBoxFragment extends Fragment {
         binding.btnStart.setOnClickListener(v -> action("启动", SingBoxController::start));
         binding.btnStop.setOnClickListener(v -> action("停止", SingBoxController::stop));
         binding.btnRestart.setOnClickListener(v -> action("重启", SingBoxController::restart));
-        binding.btnUpdate.setOnClickListener(v -> updateToChannel(false));
-        binding.btnSwitch.setOnClickListener(v -> updateToChannel(true));
-        binding.btnRollback.setOnClickListener(v -> showReleaseList());
-        binding.btnConfig.setOnClickListener(v -> applyConfig());
+        binding.btnLogCopy.setOnClickListener(v -> copyLog());
+        binding.btnLogClear.setOnClickListener(v -> binding.output.setText(""));
 
-        binding.configUrl.setText(Prefs.getString(Keys.SINGBOX_CONFIG_URL, ""));
-        binding.webUrl.setText(Prefs.getString(Keys.SINGBOX_WEB_URL, ""));
-        binding.switchTileWeb.setChecked(Prefs.getBoolean(Keys.SINGBOX_TILE_WEB, true));
-        binding.switchTileWeb.setOnCheckedChangeListener((button, checked) ->
-                Prefs.setBoolean(Keys.SINGBOX_TILE_WEB, checked));
-        binding.btnOpenWeb.setOnClickListener(v -> {
-            String url = text(binding.webUrl);
-            if (TextUtils.isEmpty(url)) {
-                toast(getString(R.string.singbox_web_no_url));
-                return;
-            }
-            Prefs.setString(Keys.SINGBOX_WEB_URL, url);
-            startActivity(new Intent(requireContext(), SingBoxWebActivity.class));
-        });
+        binding.rowVersion.title.setText(R.string.singbox_entry_version);
+        binding.rowVersion.summary.setText(R.string.singbox_entry_version_summary);
+        binding.rowVersion.getRoot().setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), SingBoxVersionActivity.class)));
+
+        binding.rowConfig.title.setText(R.string.singbox_entry_config);
+        binding.rowConfig.summary.setText(R.string.singbox_entry_config_summary);
+        binding.rowConfig.getRoot().setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), SingBoxConfigActivity.class)));
 
         binding.switchAutostart.setOnCheckedChangeListener((button, checked) -> {
-            if (suppressAutostartListener) {
+            if (!autostartListenerArmed) {
                 return;
             }
             applyAutostart(checked);
         });
+        autostartListenerArmed = true;
 
         refreshStatus();
         refreshAutostart();
@@ -116,10 +86,6 @@ public final class SingBoxFragment extends Fragment {
     public void onDestroyView() {
         binding = null;
         super.onDestroyView();
-    }
-
-    private String text(EditText edit) {
-        return edit.getText() == null ? "" : edit.getText().toString().trim();
     }
 
     // ==================================================================================
@@ -141,62 +107,22 @@ public final class SingBoxFragment extends Fragment {
                 binding.statusRun.setText(status.running()
                         ? getString(R.string.singbox_state_running, status.pid)
                         : getString(R.string.singbox_state_stopped));
-                // 运行中用绿色，停止用灰色，没 root 用红色，一眼能看出当前态。
-                binding.statusRun.setTextColor(status.running()
-                        ? COLOR_RUNNING : COLOR_STOPPED);
+                binding.statusRun.setTextColor(status.running() ? 0xFF43A047 : 0xFF9E9E9E);
                 binding.statusRoot.setText(root
-                        ? R.string.singbox_state_ready
-                        : R.string.singbox_state_no_root);
-                binding.statusRoot.setTextColor(root ? COLOR_ROOT_OK : COLOR_NO_ROOT);
-                binding.statusRoot.setTypeface(null, Typeface.BOLD);
+                        ? R.string.singbox_state_ready : R.string.singbox_state_no_root);
+                binding.statusRoot.setTextColor(root ? 0xFF3482FF : 0xFFF5A524);
                 applyEnabled(root && !busy);
             });
         });
     }
 
-    /** 读一下自启脚本是否存在，以及 root 框架是否支持 service.d。 */
-    private void refreshAutostart() {
-        EXECUTOR.execute(() -> {
-            boolean installed = Autostart.installed();
-            String framework = Autostart.framework();
-            ui(() -> {
-                if (binding == null) {
-                    return;
-                }
-                suppressAutostartListener = true;
-                binding.switchAutostart.setChecked(installed);
-                suppressAutostartListener = false;
-                boolean supported = !framework.isEmpty();
-                binding.switchAutostart.setEnabled(supported);
-                binding.autostartHint.setText(supported
-                        ? getString(R.string.singbox_autostart_hint, framework,
-                        Autostart.SCRIPT_PATH)
-                        : getString(R.string.singbox_autostart_unsupported));
-            });
-        });
-    }
-
-    private void applyAutostart(boolean enable) {
-        append(getString(R.string.singbox_output_running,
-                enable ? "开启开机自启" : "关闭开机自启"));
-        EXECUTOR.execute(() -> {
-            RootShell.Result result = enable ? Autostart.install() : Autostart.uninstall();
-            boolean stillInstalled = Autostart.installed();
-            ui(() -> {
-                if (binding == null) {
-                    return;
-                }
-                append(result.ok() ? result.output
-                        : getString(R.string.singbox_output_done, "",
-                        String.valueOf(result.code)) + "\n" + result.output);
-                suppressAutostartListener = true;
-                binding.switchAutostart.setChecked(stillInstalled);
-                suppressAutostartListener = false;
-                if (!result.ok() && isAdded()) {
-                    toast(result.output);
-                }
-            });
-        });
+    private void applyEnabled(boolean enabled) {
+        if (binding == null) {
+            return;
+        }
+        binding.btnStart.setEnabled(enabled);
+        binding.btnStop.setEnabled(enabled);
+        binding.btnRestart.setEnabled(enabled);
     }
 
     // ==================================================================================
@@ -222,112 +148,15 @@ public final class SingBoxFragment extends Fragment {
                 if (binding == null) {
                     return;
                 }
-                append(getString(R.string.singbox_output_done, label,
-                        finalResult.ok() ? getString(R.string.singbox_output_ok)
-                                : String.valueOf(finalResult.code)));
                 if (!TextUtils.isEmpty(finalResult.output)) {
                     append(finalResult.output);
                 }
+                append(finalResult.ok() ? "✔ 完成" : "✘ 失败");
                 setBusy(false);
                 refreshStatus();
             });
         });
     }
-
-    private void updateToChannel(boolean switchChannel) {
-        setBusy(true);
-        append(getString(R.string.singbox_output_running,
-                switchChannel ? "切换通道" : "更新"));
-        EXECUTOR.execute(() -> {
-            SingBoxController.Status status = SingBoxController.status();
-            boolean targetBeta = switchChannel ? !status.beta() : status.beta();
-            SingBoxController.Release release = SingBoxController.latestForChannel(targetBeta);
-            if (release == null) {
-                finishAction(getString(R.string.singbox_no_release),
-                        getString(R.string.singbox_no_release));
-                return;
-            }
-            RootShell.Result result = SingBoxController.install(requireContext(), release,
-                    step -> ui(() -> append(step)));
-            finishAction(result.output,
-                    result.ok() ? getString(R.string.singbox_output_ok)
-                            : String.valueOf(result.code));
-        });
-    }
-
-    private void showReleaseList() {
-        setBusy(true);
-        EXECUTOR.execute(() -> {
-            List<SingBoxController.Release> releases = SingBoxController.releases();
-            ui(() -> {
-                setBusy(false);
-                if (binding == null || !isAdded()) {
-                    return;
-                }
-                if (releases.isEmpty()) {
-                    toast(getString(R.string.singbox_no_release));
-                    return;
-                }
-                String[] items = new String[releases.size()];
-                for (int i = 0; i < releases.size(); i++) {
-                    items[i] = releases.get(i).display();
-                }
-                new MaterialAlertDialogBuilder(requireContext())
-                        .setTitle(R.string.singbox_rollback)
-                        .setItems(items, (dialog, which) -> install(releases.get(which)))
-                        .setNegativeButton(R.string.cancel, null)
-                        .show();
-            });
-        });
-    }
-
-    private void install(SingBoxController.Release release) {
-        setBusy(true);
-        append(getString(R.string.singbox_output_running, "安装 " + release.tag));
-        EXECUTOR.execute(() -> {
-            RootShell.Result result = SingBoxController.install(requireContext(), release,
-                    step -> ui(() -> append(step)));
-            finishAction(result.output,
-                    result.ok() ? getString(R.string.singbox_output_ok)
-                            : String.valueOf(result.code));
-        });
-    }
-
-    private void applyConfig() {
-        String url = text(binding.configUrl);
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            toast(getString(R.string.singbox_config_bad_url));
-            return;
-        }
-        Prefs.setString(Keys.SINGBOX_CONFIG_URL, url);
-        setBusy(true);
-        append(getString(R.string.singbox_output_running, "更新配置"));
-        EXECUTOR.execute(() -> {
-            RootShell.Result result = SingBoxController.updateConfig(requireContext(), url,
-                    step -> ui(() -> append(step)));
-            finishAction(result.output,
-                    result.ok() ? getString(R.string.singbox_output_ok)
-                            : String.valueOf(result.code));
-        });
-    }
-
-    private void finishAction(String output, String statusText) {
-        ui(() -> {
-            if (binding == null) {
-                return;
-            }
-            if (!TextUtils.isEmpty(output)) {
-                append(output);
-            }
-            append(statusText);
-            setBusy(false);
-            refreshStatus();
-        });
-    }
-
-    // ==================================================================================
-    // 界面杂项
-    // ==================================================================================
 
     private void setBusy(boolean active) {
         busy = active;
@@ -338,7 +167,6 @@ public final class SingBoxFragment extends Fragment {
         if (active) {
             applyEnabled(false);
         } else {
-            // 结束忙碌时要按真实的 root 状态回填，不能一律置为可用。
             EXECUTOR.execute(() -> {
                 boolean root = SingBoxController.status().rootGranted;
                 ui(() -> applyEnabled(root));
@@ -346,25 +174,14 @@ public final class SingBoxFragment extends Fragment {
         }
     }
 
-    private void applyEnabled(boolean enabled) {
-        if (binding == null) {
-            return;
-        }
-        binding.btnStart.setEnabled(enabled);
-        binding.btnStop.setEnabled(enabled);
-        binding.btnRestart.setEnabled(enabled);
-        binding.btnUpdate.setEnabled(enabled);
-        binding.btnSwitch.setEnabled(enabled);
-        binding.btnRollback.setEnabled(enabled);
-        binding.btnConfig.setEnabled(enabled);
-    }
-
+    /** 追加日志并滚到底部，只留尾部 200 行。 */
     private void append(String text) {
         if (binding == null || TextUtils.isEmpty(text)) {
             return;
         }
-        CharSequence current = binding.output.getText();
-        String merged = (current == null ? "" : current.toString()) + text + "\n";
+        String current = binding.output.getText() == null ? ""
+                : binding.output.getText().toString();
+        String merged = current + text + "\n";
         String[] lines = merged.split("\n");
         if (lines.length > 200) {
             StringBuilder builder = new StringBuilder();
@@ -374,6 +191,64 @@ public final class SingBoxFragment extends Fragment {
             merged = builder.toString();
         }
         binding.output.setText(merged);
+        binding.logScroll.post(() -> binding.logScroll.fullScroll(View.FOCUS_DOWN));
+    }
+
+    private void copyLog() {
+        if (binding == null) {
+            return;
+        }
+        CharSequence text = binding.output.getText();
+        if (TextUtils.isEmpty(text)) {
+            return;
+        }
+        android.content.ClipboardManager manager = (android.content.ClipboardManager)
+                requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        manager.setPrimaryClip(android.content.ClipData.newPlainText("sing-box log", text));
+        toast(getString(R.string.singbox_log_copied));
+    }
+
+    // ==================================================================================
+    // 开机自启
+    // ==================================================================================
+
+    private void refreshAutostart() {
+        EXECUTOR.execute(() -> {
+            boolean installed = Autostart.installed();
+            String framework = Autostart.framework();
+            ui(() -> {
+                if (binding == null) {
+                    return;
+                }
+                autostartListenerArmed = false;
+                binding.switchAutostart.setChecked(installed);
+                autostartListenerArmed = true;
+                boolean supported = !framework.isEmpty();
+                binding.switchAutostart.setEnabled(supported);
+                binding.autostartHint.setText(supported
+                        ? getString(R.string.singbox_autostart_hint, framework,
+                        Autostart.SCRIPT_PATH)
+                        : getString(R.string.singbox_autostart_unsupported));
+            });
+        });
+    }
+
+    private void applyAutostart(boolean enable) {
+        append(getString(R.string.singbox_output_running,
+                enable ? "开启开机自启" : "关闭开机自启"));
+        EXECUTOR.execute(() -> {
+            RootShell.Result result = enable ? Autostart.install() : Autostart.uninstall();
+            boolean installed = Autostart.installed();
+            ui(() -> {
+                if (binding == null) {
+                    return;
+                }
+                append(TextUtils.isEmpty(result.output) ? "✔ 完成" : result.output);
+                autostartListenerArmed = false;
+                binding.switchAutostart.setChecked(installed);
+                autostartListenerArmed = true;
+            });
+        });
     }
 
     private void toast(String message) {
@@ -382,8 +257,9 @@ public final class SingBoxFragment extends Fragment {
         }
     }
 
-    /** 一律投递到主线程；用全局 Handler，Fragment 暂时不在前台也不会丢更新。 */
     private void ui(Runnable runnable) {
-        MAIN.post(runnable);
+        if (isAdded()) {
+            requireActivity().runOnUiThread(runnable);
+        }
     }
 }

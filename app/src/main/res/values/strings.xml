@@ -18,6 +18,12 @@
     <string name="section_mifitness">小米运动健康</string>
     <string name="section_telephony">电话 / SIM 信息</string>
     <string name="section_fcm">FCM 推送修复</string>
+    <string name="section_system_group">系统功能</string>
+    <string name="group_lock_summary">双击手势提示线锁屏、上滑通知限制、保留通知</string>
+    <string name="group_fitness_summary">小米运动健康免打扰同步与权限</string>
+    <string name="group_update_summary">阻止应用自动更新，并选择要保护的应用</string>
+    <string name="group_telephony_summary">伪装电话与 SIM 信息，选择生效的应用</string>
+    <string name="group_fcm_summary">修复 HyperOS 下的 FCM 推送延迟与丢失</string>
     <string name="section_tools">工具</string>
 
     <string name="unlock_notification_title">解除通知限制</string>
@@ -205,6 +211,77 @@
     <string name="singbox_autostart_hint">%1$s · %2$s</string>
     <string name="singbox_autostart_unsupported">当前 root 框架不支持 service.d（需要 Magisk / KernelSU / APatch）</string>
     <string name="singbox_version_hint">新版本会先试跑一次，跑不起来自动恢复旧版；服务运行中更新会自动重启。</string>
+    <!-- sing-box 一级/二级 -->
+    <string name="dual_signal_detail_title">尺寸与粗细</string>
+    <string name="dual_signal_detail_summary">调整圆点大小、信号格粗细与文字</string>
+    <string name="dual_signal_detail_summary_off">双排信号未开启，这里调了也不会显示</string>
+    <string name="dual_signal_detail_hint">双排信号当前是关闭的，打开上面的开关后设置才会生效。</string>
+    <string name="singbox_entry_version">版本管理</string>
+    <string name="singbox_entry_version_summary">更新、切换正式版与测试版、回退历史版本</string>
+    <string name="singbox_entry_config">配置文件</string>
+    <string name="singbox_entry_config_summary">订阅地址、在线编辑、校验与云盘上传</string>
+    <string name="singbox_section_more">更多设置</string>
+    <string name="singbox_log_title">日志</string>
+    <string name="singbox_log_empty">还没有输出</string>
+    <string name="singbox_log_copy">复制</string>
+    <string name="singbox_log_clear">清空</string>
+    <string name="singbox_log_copied">日志已复制</string>
+    <string name="singbox_web_apply">应用地址</string>
+    <string name="singbox_web_edit_hint">网页地址</string>
+
+    <!-- 配置页 -->
+    <string name="singbox_config_subscribe">订阅地址</string>
+    <string name="singbox_config_edit">编辑配置文件</string>
+    <string name="singbox_config_edit_summary">支持 JSON 校验、格式化与语法高亮</string>
+    <string name="singbox_webdav">云盘上传（WebDAV）</string>
+    <string name="singbox_webdav_summary">把 config.json 上传到你的 WebDAV 云盘</string>
+    <string name="singbox_webdav_url">服务器地址（https://dav.example.com/dav）</string>
+    <string name="singbox_webdav_user">用户名</string>
+    <string name="singbox_webdav_pass">密码 / 应用密码</string>
+    <string name="singbox_webdav_path">远端路径（如 singbox/config.json）</string>
+    <string name="singbox_webdav_upload">上传当前配置</string>
+    <string name="singbox_webdav_minify">上传前压缩 JSON</string>
+    <string name="singbox_webdav_minify_hint">默认开启：压成单行，体积更小，仍可直接当配置用；关掉则按文件原样上传</string>
+    <string name="singbox_webdav_uploaded">已上传（%1$s → %2$s）</string>
+    <string name="singbox_webdav_test">测试连接</string>
+    <string name="singbox_webdav_saved">云盘设置已保存</string>
+    <string name="singbox_webdav_missing">请先把服务器地址和用户名填好</string>
+
+    <!-- 编辑器 -->
+    <string name="editor_title">编辑配置文件</string>
+    <string name="editor_validate">校验</string>
+    <string name="editor_format">格式化</string>
+    <string name="editor_save">保存</string>
+    <string name="editor_upload">上传云盘</string>
+    <string name="editor_reload">重新载入</string>
+    <string name="editor_find">查找替换</string>
+    <string name="editor_goto">跳到行</string>
+    <string name="editor_find_hint">查找内容</string>
+    <string name="editor_replace_hint">替换为（留空则只查找）</string>
+    <string name="editor_find_next">下一个</string>
+    <string name="editor_find_prev">上一个</string>
+    <string name="editor_find_close">关闭</string>
+    <string name="editor_replace">替换</string>
+    <string name="editor_find_count">%1$d/%2$d</string>
+    <string name="editor_replace_all">全部替换</string>
+    <string name="editor_not_found">没有找到匹配内容</string>
+    <string name="editor_replaced">已替换 %1$d 处</string>
+    <string name="editor_goto_hint">输入行号</string>
+    <string name="editor_line_invalid">行号超出范围</string>
+    <string name="editor_rewrapped">已按窗口宽度重新排版</string>
+    <string name="editor_minify">压缩</string>
+    <string name="editor_minified">已压缩为单行</string>
+    <string name="editor_loading">正在读取 /data/local/tmp/box/config.json …</string>
+    <string name="editor_loaded">已载入，共 %1$d 行</string>
+    <string name="editor_valid">JSON 格式正确</string>
+    <string name="editor_invalid">第 %1$d 行第 %2$d 列：%3$s</string>
+    <string name="editor_saved">已保存到 config.json</string>
+    <string name="editor_save_failed">保存失败：%1$s</string>
+    <string name="editor_format_done">已格式化</string>
+    <string name="editor_hint_misspell">是不是想写 %1$s ？</string>
+    <string name="editor_check_ok">sing-box 校验通过</string>
+    <string name="editor_check_failed">sing-box 校验未通过：
+%1$s</string>
 </resources>
 
 

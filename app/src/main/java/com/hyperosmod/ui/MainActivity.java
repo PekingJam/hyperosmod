@@ -18,7 +18,6 @@ import com.hyperosmod.Keys;
 import com.hyperosmod.R;
 import com.hyperosmod.data.Prefs;
 import com.hyperosmod.databinding.ActivityMainBinding;
-import com.hyperosmod.databinding.RowSliderBinding;
 import com.hyperosmod.databinding.RowSwitchBinding;
 import com.hyperosmod.singbox.SingBoxFragment;
 import com.hyperosmod.singbox.TileEntryActivity;
@@ -48,13 +47,9 @@ public final class MainActivity extends AppCompatActivity {
         UiUtils.applySystemBars(this);
         setSupportActionBar(binding.toolbar);
 
-        bindLockScreenRows();
         bindThemeRows();
         bindStatusBarRows();
-        bindUpdateRows();
-        bindDndRows();
-        bindTelephonyRows();
-        bindFcmRows();
+        bindGroupRows();
 
         binding.bottomNav.setOnItemSelectedListener(item -> {
             showPage(item.getItemId());
@@ -146,21 +141,29 @@ public final class MainActivity extends AppCompatActivity {
                 .commitAllowingStateLoss();
     }
 
-    private void bindLockScreenRows() {
-        bindSwitch(binding.rowGestureLineLock, Keys.GESTURE_LINE_LOCK,
-                R.string.gesture_line_lock_title, R.string.gesture_line_lock_summary);
-        // 手势提示线的触摸判定在桌面进程里，桌面没进作用域时这个开关等于没开，直接提示。
-        binding.rowGestureLineLock.switchView.setOnCheckedChangeListener((button, checked) -> {
-            Prefs.setBoolean(Keys.GESTURE_LINE_LOCK, checked);
-            if (checked && !App.isInScope("com.miui.home")) {
-                Toast.makeText(this, R.string.gesture_line_lock_scope_missing,
-                        Toast.LENGTH_LONG).show();
-            }
+    /** 「系统」一级页只放入口，具体开关都在分组页里，和 sing-box 页保持同一套结构。 */
+    private void bindGroupRows() {
+        bindGroup(binding.rowGroupLock, R.string.section_lockscreen,
+                R.string.group_lock_summary, GroupSettingsActivity.GROUP_LOCK);
+        bindGroup(binding.rowGroupFitness, R.string.section_mifitness,
+                R.string.group_fitness_summary, GroupSettingsActivity.GROUP_FITNESS);
+        bindGroup(binding.rowGroupUpdate, R.string.section_updates,
+                R.string.group_update_summary, GroupSettingsActivity.GROUP_UPDATE);
+        bindGroup(binding.rowGroupTelephony, R.string.section_telephony,
+                R.string.group_telephony_summary, GroupSettingsActivity.GROUP_TELEPHONY);
+        bindGroup(binding.rowGroupFcm, R.string.section_fcm,
+                R.string.group_fcm_summary, GroupSettingsActivity.GROUP_FCM);
+    }
+
+    private void bindGroup(com.hyperosmod.databinding.RowAppsBinding row, int title,
+                           int summary, String group) {
+        row.title.setText(title);
+        row.summary.setText(summary);
+        row.getRoot().setOnClickListener(v -> {
+            Intent intent = new Intent(this, GroupSettingsActivity.class);
+            intent.putExtra(GroupSettingsActivity.EXTRA_GROUP, group);
+            startActivity(intent);
         });
-        bindSwitch(binding.rowUnlockNotification, Keys.UNLOCK_NOTIFICATION_RESTRICT,
-                R.string.unlock_notification_title, R.string.unlock_notification_summary);
-        bindSwitch(binding.rowKeepNotification, Keys.KEEP_NOTIFICATION,
-                R.string.keep_notification_title, R.string.keep_notification_summary);
     }
 
     private void bindThemeRows() {
@@ -193,188 +196,20 @@ public final class MainActivity extends AppCompatActivity {
         });
         bindSwitch(binding.rowClockSeconds, Keys.CLOCK_SECONDS,
                 R.string.clock_seconds_title, R.string.clock_seconds_summary);
-        bindSliderRow(binding.rowDualSignalScale,
-                R.string.dual_signal_scale_title,
-                R.string.dual_signal_scale_summary,
-                Keys.DUAL_SIGNAL_SCALE,
-                Keys.DUAL_SIGNAL_SCALE_MIN,
-                Keys.DUAL_SIGNAL_SCALE_MAX,
-                Keys.DUAL_SIGNAL_SCALE_DEFAULT);
-        bindSliderRow(binding.rowDualSignalThickness,
-                R.string.dual_signal_thickness_title,
-                R.string.dual_signal_thickness_summary,
-                Keys.DUAL_SIGNAL_THICKNESS,
-                Keys.DUAL_SIGNAL_THICKNESS_MIN,
-                Keys.DUAL_SIGNAL_THICKNESS_MAX,
-                Keys.DUAL_SIGNAL_THICKNESS_DEFAULT);
-        bindSliderRow(binding.rowDualTextScale,
-                R.string.dual_text_scale_title,
-                R.string.dual_text_scale_summary,
-                Keys.DUAL_TEXT_SCALE,
-                Keys.DUAL_TEXT_SCALE_MIN,
-                Keys.DUAL_TEXT_SCALE_MAX,
-                Keys.DUAL_TEXT_SCALE_DEFAULT);
-        bindSliderRow(binding.rowDualTextThickness,
-                R.string.dual_text_thickness_title,
-                R.string.dual_text_thickness_summary,
-                Keys.DUAL_TEXT_THICKNESS,
-                Keys.DUAL_TEXT_THICKNESS_MIN,
-                Keys.DUAL_TEXT_THICKNESS_MAX,
-                Keys.DUAL_TEXT_THICKNESS_DEFAULT);
-    }
-
-    private void bindSliderRow(RowSliderBinding row, int title, int summary, String key,
-                               int min, int max, int defaultValue) {
-        row.title.setText(title);
-        row.slider.setValueFrom(min);
-        row.slider.setValueTo(max);
-        row.slider.setStepSize(5);
-        int value = clamp(Prefs.getInt(key, defaultValue), min, max);
-        row.slider.setValue(value);
-        row.summary.setText(getString(summary, value));
-        row.slider.addOnChangeListener((slider, current, fromUser) -> {
-            int rounded = Math.round(current);
-            row.summary.setText(getString(summary, rounded));
-            if (fromUser) {
-                Prefs.setInt(key, rounded);
-            }
-        });
+        binding.rowDualSignalDetail.title.setText(R.string.dual_signal_detail_title);
+        binding.rowDualSignalDetail.summary.setText(R.string.dual_signal_detail_summary);
+        binding.rowDualSignalDetail.getRoot().setOnClickListener(v ->
+                startActivity(new Intent(this, DualSignalSettingsActivity.class)));
     }
 
     private void updateDualSignalRows() {
         boolean enabled = Prefs.getBoolean(Keys.DUAL_ROW_SIGNAL, false);
-        binding.dualSignalHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        float alpha = enabled ? 1f : 0.45f;
-        binding.rowDualSignalScale.getRoot().setAlpha(alpha);
-        binding.rowDualSignalScale.slider.setEnabled(enabled);
-        binding.rowDualSignalThickness.getRoot().setAlpha(alpha);
-        binding.rowDualSignalThickness.slider.setEnabled(enabled);
-        binding.rowDualTextScale.getRoot().setAlpha(alpha);
-        binding.rowDualTextScale.slider.setEnabled(enabled);
-        binding.rowDualTextThickness.getRoot().setAlpha(alpha);
-        binding.rowDualTextThickness.slider.setEnabled(enabled);
+        binding.dualSignalHint.setVisibility(enabled ? View.GONE : View.VISIBLE);
+        binding.rowDualSignalDetail.summary.setText(enabled
+                ? R.string.dual_signal_detail_summary
+                : R.string.dual_signal_detail_summary_off);
     }
 
-    private void updateDualSignalValues() {
-        binding.rowDualSignalScale.slider.setValue(clamp(
-                Prefs.getInt(Keys.DUAL_SIGNAL_SCALE, Keys.DUAL_SIGNAL_SCALE_DEFAULT),
-                Keys.DUAL_SIGNAL_SCALE_MIN, Keys.DUAL_SIGNAL_SCALE_MAX));
-        binding.rowDualSignalThickness.slider.setValue(clamp(
-                Prefs.getInt(Keys.DUAL_SIGNAL_THICKNESS, Keys.DUAL_SIGNAL_THICKNESS_DEFAULT),
-                Keys.DUAL_SIGNAL_THICKNESS_MIN, Keys.DUAL_SIGNAL_THICKNESS_MAX));
-        binding.rowDualTextScale.slider.setValue(clamp(
-                Prefs.getInt(Keys.DUAL_TEXT_SCALE, Keys.DUAL_TEXT_SCALE_DEFAULT),
-                Keys.DUAL_TEXT_SCALE_MIN, Keys.DUAL_TEXT_SCALE_MAX));
-        binding.rowDualTextThickness.slider.setValue(clamp(
-                Prefs.getInt(Keys.DUAL_TEXT_THICKNESS, Keys.DUAL_TEXT_THICKNESS_DEFAULT),
-                Keys.DUAL_TEXT_THICKNESS_MIN, Keys.DUAL_TEXT_THICKNESS_MAX));
-    }
-
-    private void bindUpdateRows() {
-        bindSwitch(binding.rowBlockUpdates, Keys.BLOCK_UPDATES_ENABLED,
-                R.string.block_updates_title, R.string.block_updates_summary);
-        binding.rowBlockedApps.title.setText(R.string.choose_apps_title);
-        binding.rowBlockedApps.getRoot().setOnClickListener(v ->
-                startActivity(new Intent(this, BlockedAppsActivity.class)));
-    }
-
-    private void bindDndRows() {
-        bindSwitch(binding.rowRestoreDnd, Keys.RESTORE_DND_SYNC,
-                R.string.restore_dnd_title, R.string.restore_dnd_summary);
-        binding.rowRestoreDnd.switchView.setOnCheckedChangeListener((button, checked) -> {
-            Prefs.setBoolean(Keys.RESTORE_DND_SYNC, checked);
-            updateDndRow();
-            if (checked) {
-                maybePromptDndAccess();
-            }
-        });
-
-        binding.rowDndPermission.title.setText(R.string.dnd_permission_title);
-        binding.rowDndPermission.getRoot().setOnClickListener(v ->
-                PermissionHelper.openDndAccessSettings(this));
-    }
-
-    private void updateDndRow() {
-        boolean installed = PermissionHelper.isMiFitnessInstalled(this);
-        boolean granted = installed && PermissionHelper.hasMiFitnessDndAccess(this);
-        boolean enabled = Prefs.getBoolean(Keys.RESTORE_DND_SYNC, false);
-
-        binding.rowDndPermission.getRoot().setEnabled(installed);
-        binding.rowDndPermission.getRoot().setAlpha(installed ? 1f : 0.45f);
-        if (!installed) {
-            binding.rowDndPermission.summary.setText(R.string.dnd_permission_not_installed);
-        } else if (granted) {
-            binding.rowDndPermission.summary.setText(R.string.dnd_permission_granted);
-        } else {
-            binding.rowDndPermission.summary.setText(R.string.dnd_permission_missing);
-        }
-        binding.dndHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
-    }
-
-    private void bindTelephonyRows() {
-        bindSwitch(binding.rowTelephonyEnabled, Keys.TELEPHONY_ENABLED,
-                R.string.telephony_enabled_title, R.string.telephony_enabled_summary);
-        binding.rowTelephonyTargets.title.setText(R.string.telephony_targets_title);
-        binding.rowTelephonyTargets.getRoot().setOnClickListener(v -> {
-            Intent intent = new Intent(this, BlockedAppsActivity.class);
-            intent.putExtra(BlockedAppsActivity.EXTRA_MODE,
-                    BlockedAppsActivity.MODE_TELEPHONY_TARGETS);
-            startActivity(intent);
-        });
-        binding.rowTelephonyEdit.title.setText(R.string.telephony_edit_title);
-        binding.rowTelephonyEdit.getRoot().setOnClickListener(v ->
-                startActivity(new Intent(this, TelephonySettingsActivity.class)));
-    }
-
-    private void updateTelephonyRows() {
-        boolean enabled = Prefs.getBoolean(Keys.TELEPHONY_ENABLED, false);
-        Set<String> targets = Prefs.getStringSet(Keys.TELEPHONY_TARGETS);
-        binding.rowTelephonyTargets.summary.setText(targets.isEmpty()
-                ? getString(R.string.telephony_targets_summary_zero)
-                : getString(R.string.telephony_targets_summary, targets.size()));
-        binding.rowTelephonyEdit.summary.setText(R.string.telephony_edit_summary);
-        binding.telephonyHint.setVisibility(enabled ? View.VISIBLE : View.GONE);
-    }
-
-    private void bindFcmRows() {
-        bindSwitch(binding.rowFcmEnabled, Keys.FCM_FIX_ENABLED,
-                R.string.fcm_fix_title, R.string.fcm_fix_summary);
-        binding.rowFcmTargets.title.setText(R.string.fcm_targets_title);
-        binding.rowFcmTargets.getRoot().setOnClickListener(v -> {
-            Intent intent = new Intent(this, BlockedAppsActivity.class);
-            intent.putExtra(BlockedAppsActivity.EXTRA_MODE,
-                    BlockedAppsActivity.MODE_FCM_TARGETS);
-            startActivity(intent);
-        });
-        bindSwitch(binding.rowFcmKeep, Keys.FCM_KEEP_NOTIFICATION,
-                R.string.fcm_keep_title, R.string.fcm_keep_summary, true);
-    }
-
-    private void updateFcmRows() {
-        boolean enabled = Prefs.getBoolean(Keys.FCM_FIX_ENABLED, false);
-        Set<String> targets = Prefs.getStringSet(Keys.FCM_TARGETS);
-        binding.rowFcmTargets.summary.setText(targets.isEmpty()
-                ? getString(R.string.fcm_targets_summary_zero)
-                : getString(R.string.fcm_targets_summary, targets.size()));
-        binding.rowFcmKeep.getRoot().setEnabled(enabled);
-        binding.rowFcmKeep.getRoot().setAlpha(enabled ? 1f : 0.45f);
-        binding.rowFcmKeep.switchView.setEnabled(enabled);
-
-        if (!enabled) {
-            binding.fcmHint.setVisibility(View.GONE);
-            return;
-        }
-        binding.fcmHint.setVisibility(View.VISIBLE);
-        if (targets.isEmpty()) {
-            binding.fcmHint.setText(R.string.fcm_targets_missing);
-        } else if (!App.isInScope("system") || !App.isInScope("com.miui.powerkeeper")) {
-            binding.fcmHint.setText(R.string.fcm_scope_missing);
-        } else if (Boolean.FALSE.equals(PermissionHelper.isGmsInMilletWhitelist(this))) {
-            binding.fcmHint.setText(R.string.fcm_whitelist_missing);
-        } else {
-            binding.fcmHint.setText(R.string.fcm_hint);
-        }
-    }
 
     private void checkPermissions() {
         if (!PermissionHelper.hasAppListAccess(this)) {
@@ -435,33 +270,16 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void refreshAll() {
-        binding.rowGestureLineLock.switchView.setChecked(
-                Prefs.getBoolean(Keys.GESTURE_LINE_LOCK, false));
-        binding.rowUnlockNotification.switchView.setChecked(
-                Prefs.getBoolean(Keys.UNLOCK_NOTIFICATION_RESTRICT, false));
-        binding.rowKeepNotification.switchView.setChecked(
-                Prefs.getBoolean(Keys.KEEP_NOTIFICATION, false));
         binding.rowCustomTheme.switchView.setChecked(
                 Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false));
         binding.rowDualSignal.switchView.setChecked(
                 Prefs.getBoolean(Keys.DUAL_ROW_SIGNAL, false));
-        binding.rowBlockUpdates.switchView.setChecked(
-                Prefs.getBoolean(Keys.BLOCK_UPDATES_ENABLED, false));
-        binding.rowTelephonyEnabled.switchView.setChecked(
-                Prefs.getBoolean(Keys.TELEPHONY_ENABLED, false));
-        binding.rowFcmEnabled.switchView.setChecked(
-                Prefs.getBoolean(Keys.FCM_FIX_ENABLED, false));
-        binding.rowFcmKeep.switchView.setChecked(
-                Prefs.getBoolean(Keys.FCM_KEEP_NOTIFICATION, true));
+        binding.rowClockSeconds.switchView.setChecked(
+                Prefs.getBoolean(Keys.CLOCK_SECONDS, false));
 
         updateThemeRow();
-        updateDualSignalValues();
         updateDualSignalRows();
         pruneUninstalledTargets();
-        updateBlockedAppsRow();
-        updateDndRow();
-        updateTelephonyRows();
-        updateFcmRows();
         refreshStatus();
     }
 
@@ -495,13 +313,6 @@ public final class MainActivity extends AppCompatActivity {
         if (pruned != current) {
             Prefs.setStringSet(key, pruned);
         }
-    }
-
-    private void updateBlockedAppsRow() {
-        Set<String> blocked = Prefs.getStringSet(Keys.BLOCKED_PACKAGES);
-        binding.rowBlockedApps.summary.setText(blocked.isEmpty()
-                ? getString(R.string.choose_apps_summary_zero)
-                : getString(R.string.choose_apps_summary, blocked.size()));
     }
 
     private void refreshStatus() {

@@ -20,6 +20,14 @@ public final class Keys {
     public static final String SINGBOX_WEB_URL = "singbox_web_url";
     /** sing-box：配置文件下载地址（面板里可改，脚本会自己记住）。 */
     public static final String SINGBOX_CONFIG_URL = "singbox_config_url";
+    /** sing-box：WebDAV 云盘设置。 */
+    public static final String SINGBOX_WEBDAV_URL = "singbox_webdav_url";
+    public static final String SINGBOX_WEBDAV_USER = "singbox_webdav_user";
+    public static final String SINGBOX_WEBDAV_PASS = "singbox_webdav_pass";
+    public static final String SINGBOX_WEBDAV_PATH = "singbox_webdav_path";
+    /** 上传前是否把 JSON 压成一行，默认压。 */
+    public static final String SINGBOX_WEBDAV_MINIFY = "singbox_webdav_minify";
+
     /** sing-box：WebView 缓存策略，0=默认 1=缓存优先 2=不走缓存。 */
     public static final String SINGBOX_WEB_CACHE = "singbox_web_cache";
 

@@ -22,10 +22,9 @@ import com.hyperosmod.data.Prefs;
 import com.hyperosmod.databinding.FragmentSingboxWebBinding;
 
 /**
- * 网页面板：用 WebView 渲染用户配置的地址。
+ * 网页面板：顶部是地址栏（打开/保存地址就在这儿），中间 WebView，底部三个操作按钮。
  *
- * <p>顶部三个按钮：刷新、切换缓存策略、清除缓存。缓存策略三档——默认（按 HTTP 头）、
- * 缓存优先（断网也能打开上次内容）、不走缓存（每次取最新）。</p>
+ * <p>缓存策略三档：默认（按 HTTP 头）、缓存优先（断网也能看上次内容）、不走缓存。</p>
  */
 public final class SingBoxWebFragment extends Fragment {
 
@@ -68,25 +67,27 @@ public final class SingBoxWebFragment extends Fragment {
             }
         });
 
+        binding.webUrl.setText(Prefs.getString(Keys.SINGBOX_WEB_URL, ""));
+        binding.btnApply.setOnClickListener(v -> {
+            String url = binding.webUrl.getText() == null ? ""
+                    : binding.webUrl.getText().toString().trim();
+            Prefs.setString(Keys.SINGBOX_WEB_URL, url);
+            load(url);
+        });
+        binding.switchTileWeb.setChecked(Prefs.getBoolean(Keys.SINGBOX_TILE_WEB, true));
+        binding.switchTileWeb.setOnCheckedChangeListener((button, checked) ->
+                Prefs.setBoolean(Keys.SINGBOX_TILE_WEB, checked));
         binding.btnRefresh.setOnClickListener(v -> reload());
         binding.btnCache.setOnClickListener(v -> cycleCache());
         binding.btnClear.setOnClickListener(v -> clearCache());
 
-        loadConfiguredUrl();
+        load(Prefs.getString(Keys.SINGBOX_WEB_URL, ""));
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        // 地址可能在「sing-box」页刚被改过，回到这个页时重新读一次。
-        loadConfiguredUrl();
-    }
-
-    private void loadConfiguredUrl() {
+    private void load(String url) {
         if (binding == null || webView == null) {
             return;
         }
-        String url = Prefs.getString(Keys.SINGBOX_WEB_URL, "");
         if (TextUtils.isEmpty(url)) {
             binding.empty.setVisibility(View.VISIBLE);
             webView.setVisibility(View.GONE);
@@ -94,16 +95,14 @@ public final class SingBoxWebFragment extends Fragment {
         }
         binding.empty.setVisibility(View.GONE);
         webView.setVisibility(View.VISIBLE);
-        if (!url.equals(webView.getUrl())) {
-            webView.loadUrl(url);
-        }
+        webView.loadUrl(url);
     }
 
     private void reload() {
         if (webView != null && webView.getUrl() != null) {
             webView.reload();
         } else {
-            loadConfiguredUrl();
+            load(Prefs.getString(Keys.SINGBOX_WEB_URL, ""));
         }
     }
 
@@ -152,7 +151,6 @@ public final class SingBoxWebFragment extends Fragment {
         }
     }
 
-    /** 供宿主 Activity 处理返回键；返回 true 表示已经消费（回退网页历史）。 */
     public boolean handleBack() {
         if (webView != null && webView.canGoBack()) {
             webView.goBack();

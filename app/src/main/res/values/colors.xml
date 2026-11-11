@@ -5,4 +5,5 @@
     <color name="accent_green">#2ECC71</color>
     <color name="accent_red">#E5484D</color>
     <color name="accent_amber">#F5A524</color>
+    <color name="line_number">#B0B0B4</color>
 </resources>

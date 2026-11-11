@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色下行号压暗一些，不抢正文的视线 -->
+    <color name="line_number">#6C6C70</color>
+</resources>

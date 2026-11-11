@@ -62,6 +62,37 @@
         </activity>
 
         <activity
+            android:name=".ui.GroupSettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
+            android:name=".ui.DualSignalSettingsActivity"
+            android:exported="false"
+            android:label="@string/dual_signal_detail_title"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
+            android:name=".singbox.SingBoxVersionActivity"
+            android:exported="false"
+            android:label="@string/singbox_entry_version"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
+            android:name=".singbox.SingBoxConfigActivity"
+            android:exported="false"
+            android:label="@string/singbox_entry_config"
+            android:parentActivityName=".ui.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".singbox.ConfigEditorActivity"
+            android:exported="false"
+            android:label="@string/editor_title"
+            android:parentActivityName=".ui.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".singbox.SingBoxWebActivity"
             android:exported="false"
             android:label="@string/singbox_web_title"
