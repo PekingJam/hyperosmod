@@ -25,8 +25,7 @@ public final class TileEntryActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        String url = Prefs.getString(Keys.SINGBOX_WEB_URL, "");
-        boolean toWeb = Prefs.getBoolean(Keys.SINGBOX_TILE_WEB, true) && !url.isEmpty();
+        boolean toWeb = Prefs.getBoolean(Keys.SINGBOX_TILE_WEB, true);
         Intent next = new Intent(this, MainActivity.class);
         next.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         next.putExtra(EXTRA_TAB, toWeb ? TAB_WEB : TAB_PANEL);

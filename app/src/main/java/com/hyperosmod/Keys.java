@@ -18,6 +18,12 @@ public final class Keys {
     public static final String SINGBOX_TILE_WEB = "singbox_tile_web";
     /** sing-box：网页面板地址（磁贴长按 / 面板里的「打开网页」都用它）。 */
     public static final String SINGBOX_WEB_URL = "singbox_web_url";
+    /** sing-box：Clash 控制接口地址与密钥（原生面板用）。 */
+    public static final String SINGBOX_API_URL = "singbox_api_url";
+    public static final String SINGBOX_API_SECRET = "singbox_api_secret";
+    /** 通知栏常驻显示网速与当前节点。 */
+    public static final String SINGBOX_NOTIFY = "singbox_notify";
+
     /** sing-box：配置文件下载地址（面板里可改，脚本会自己记住）。 */
     public static final String SINGBOX_CONFIG_URL = "singbox_config_url";
     /** sing-box：WebDAV 云盘设置。 */

@@ -7,6 +7,9 @@
         tools:ignore="QueryAllPackagesPermission" />
     <!-- sing-box 面板：读取版本列表、WebView 打开用户配置的网页 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
@@ -73,6 +76,12 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".singbox.ConnectionsActivity"
+            android:exported="false"
+            android:label="@string/conn_title"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
             android:name=".singbox.SingBoxVersionActivity"
             android:exported="false"
             android:label="@string/singbox_entry_version"
@@ -92,12 +101,10 @@
             android:parentActivityName=".ui.MainActivity"
             android:windowSoftInputMode="adjustResize" />
 
-        <activity
-            android:name=".singbox.SingBoxWebActivity"
+        <service
+            android:name=".singbox.PanelStatusService"
             android:exported="false"
-            android:label="@string/singbox_web_title"
-            android:parentActivityName=".ui.MainActivity"
-            android:windowSoftInputMode="adjustResize" />
+            android:foregroundServiceType="dataSync" />
 
         <service
             android:name=".singbox.SingBoxTileService"

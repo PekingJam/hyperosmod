@@ -21,7 +21,7 @@ import com.hyperosmod.databinding.ActivityMainBinding;
 import com.hyperosmod.databinding.RowSwitchBinding;
 import com.hyperosmod.singbox.SingBoxFragment;
 import com.hyperosmod.singbox.TileEntryActivity;
-import com.hyperosmod.singbox.SingBoxWebFragment;
+import com.hyperosmod.singbox.PanelFragment;
 
 import java.util.Locale;
 import java.util.Set;
@@ -66,6 +66,10 @@ public final class MainActivity extends AppCompatActivity {
         super.onStart();
         Prefs.addServiceListener(serviceListener);
         refreshAll();
+        // 通知栏常驻是用户显式打开的，应用每次启动时对齐一次状态。
+        if (Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false)) {
+            com.hyperosmod.singbox.PanelStatusService.start(this);
+        }
     }
 
     @Override
@@ -80,7 +84,7 @@ public final class MainActivity extends AppCompatActivity {
                 : intent.getIntExtra(TileEntryActivity.EXTRA_TAB, -1);
         int target;
         if (tab == TileEntryActivity.TAB_WEB) {
-            target = R.id.tab_web;
+            target = R.id.tab_panel;
         } else if (tab == TileEntryActivity.TAB_PANEL) {
             target = R.id.tab_singbox;
         } else {
@@ -121,11 +125,11 @@ public final class MainActivity extends AppCompatActivity {
                 itemId == R.id.tab_statusbar ? View.VISIBLE : View.GONE);
         binding.pageSystem.setVisibility(itemId == R.id.tab_system ? View.VISIBLE : View.GONE);
         binding.pageSingbox.setVisibility(itemId == R.id.tab_singbox ? View.VISIBLE : View.GONE);
-        binding.pageWeb.setVisibility(itemId == R.id.tab_web ? View.VISIBLE : View.GONE);
+        binding.pagePanel.setVisibility(itemId == R.id.tab_panel ? View.VISIBLE : View.GONE);
         if (itemId == R.id.tab_singbox) {
             ensureFragment(R.id.container_singbox, SingBoxFragment::new, "singbox");
-        } else if (itemId == R.id.tab_web) {
-            ensureFragment(R.id.container_web, SingBoxWebFragment::new, "web");
+        } else if (itemId == R.id.tab_panel) {
+            ensureFragment(R.id.container_panel, PanelFragment::new, "panel");
         }
         binding.scrollContent.scrollTo(0, 0);
     }
