@@ -113,6 +113,16 @@
     <string name="fcm_whitelist_missing">HyperOS 的免限制名单中没有 GMS，系统 Hook 会尝试自动修复；修复后建议重启设备，再测试 FCM。</string>
     <string name="fcm_targets_picker_title">选择 FCM 目标应用</string>
 
+    <string name="section_notify_icon">通知图标同步</string>
+    <string name="group_notify_icon_summary">让通知栏图标跟随应用当前的桌面图标</string>
+    <string name="notify_icon_enabled_title">跟随桌面图标</string>
+    <string name="notify_icon_enabled_summary">支持在应用内换图标的客户端（如 AyuGram）换图标后，状态栏与通知面板的图标一起换</string>
+    <string name="notify_icon_targets_title">目标应用</string>
+    <string name="notify_icon_targets_summary_zero">尚未选择目标应用</string>
+    <string name="notify_icon_targets_summary">已选择 %1$d 个应用</string>
+    <string name="notify_icon_targets_picker_title">选择需要同步通知图标的应用</string>
+    <string name="notify_icon_scope_missing">「%1$s」还不在模块作用域里：请到 LSPosed → HyperOS Mod → 作用域勾选它，再重新打开该应用。</string>
+
     <string name="app_list_permission_title">需要应用列表权限</string>
     <string name="app_list_permission_message">选择要保护的应用需要读取已安装应用列表。请在系统设置中允许 HyperOS Mod 获取应用列表，然后返回本页。</string>
     <string name="dnd_permission_dialog_title">需要勿扰访问权限</string>
@@ -230,6 +240,8 @@
     <string name="panel_notify_text">↑ %1$s   ↓ %2$s</string>
     <string name="panel_notify_channel">sing-box 状态</string>
     <string name="panel_notify_resend">重新发送通知栏</string>
+    <string name="panel_notify_grant">去授予通知权限</string>
+    <string name="panel_notify_blocked">通知权限未授予，通知栏不会显示内容</string>
     <string name="panel_notify_hint">在通知栏常驻显示实时速率和当前节点，需要通知权限</string>
     <string name="panel_traffic">↑ %1$s   ↓ %2$s</string>
     <string name="panel_refresh">刷新</string>

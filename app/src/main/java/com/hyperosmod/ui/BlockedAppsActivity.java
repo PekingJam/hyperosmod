@@ -8,12 +8,14 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.hyperosmod.App;
 import com.hyperosmod.Keys;
 import com.hyperosmod.R;
 import com.hyperosmod.data.Prefs;
@@ -34,6 +36,7 @@ public final class BlockedAppsActivity extends AppCompatActivity {
     public static final int MODE_BLOCK_UPDATES = 0;
     public static final int MODE_TELEPHONY_TARGETS = 1;
     public static final int MODE_FCM_TARGETS = 2;
+    public static final int MODE_NOTIFY_ICON_TARGETS = 3;
 
     private ActivityBlockedAppsBinding binding;
     private AppListAdapter adapter;
@@ -54,7 +57,11 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         mode = getIntent().getIntExtra(EXTRA_MODE, MODE_BLOCK_UPDATES);
         storeKey = mode == MODE_TELEPHONY_TARGETS
                 ? Keys.TELEPHONY_TARGETS
-                : (mode == MODE_FCM_TARGETS ? Keys.FCM_TARGETS : Keys.BLOCKED_PACKAGES);
+                : (mode == MODE_FCM_TARGETS
+                        ? Keys.FCM_TARGETS
+                        : (mode == MODE_NOTIFY_ICON_TARGETS
+                                ? Keys.NOTIFY_ICON_TARGETS
+                                : Keys.BLOCKED_PACKAGES));
 
         setSupportActionBar(binding.toolbar);
         if (getSupportActionBar() != null) {
@@ -65,6 +72,8 @@ public final class BlockedAppsActivity extends AppCompatActivity {
             titleRes = R.string.telephony_targets_picker_title;
         } else if (mode == MODE_FCM_TARGETS) {
             titleRes = R.string.fcm_targets_picker_title;
+        } else if (mode == MODE_NOTIFY_ICON_TARGETS) {
+            titleRes = R.string.notify_icon_targets_picker_title;
         } else {
             titleRes = R.string.app_picker_title;
         }
@@ -232,6 +241,30 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         selectedPackages = new HashSet<>(selected);
         Prefs.setStringSet(storeKey, selected);
         binding.selectedCount.setText(getString(countStringRes(), selected.size()));
+        if (mode == MODE_NOTIFY_ICON_TARGETS) {
+            warnMissingScope(selected);
+        }
+    }
+
+    /** 勾了但没有 LSPosed 作用域的应用收不到 hook，当场提醒一句，别让他去猜。 */
+    private final Set<String> scopeWarned = new HashSet<>();
+
+    private void warnMissingScope(Set<String> selected) {
+        for (String packageName : selected) {
+            if (scopeWarned.contains(packageName) || App.isInScope(packageName)) {
+                continue;
+            }
+            scopeWarned.add(packageName);
+            String label;
+            try {
+                label = getPackageManager().getApplicationLabel(
+                        getPackageManager().getApplicationInfo(packageName, 0)).toString();
+            } catch (Throwable t) {
+                label = packageName;
+            }
+            Toast.makeText(this, getString(R.string.notify_icon_scope_missing, label),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void updateEmptyState() {

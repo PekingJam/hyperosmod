@@ -21,6 +21,7 @@ import com.hyperosmod.databinding.ActivityMainBinding;
 import com.hyperosmod.databinding.RowSwitchBinding;
 import com.hyperosmod.singbox.SingBoxFragment;
 import com.hyperosmod.singbox.TileEntryActivity;
+import com.hyperosmod.singbox.NotificationPermission;
 import com.hyperosmod.singbox.PanelFragment;
 
 import java.util.Locale;
@@ -38,6 +39,8 @@ public final class MainActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private boolean appListPromptShown;
     private boolean dndPromptShown;
+    /** 本次进程内只提示一次通知权限，别每次回到前台都弹。 */
+    private boolean notificationPrompted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,6 +109,36 @@ public final class MainActivity extends AppCompatActivity {
         UiUtils.applySystemBars(this);
         refreshAll();
         checkPermissions();
+        checkNotificationPermission();
+    }
+
+    /**
+     * 通知栏常驻开关开着、但权限没给时补一次授权请求。
+     *
+     * <p>没有通知权限时前台服务照样在跑，只是通知栏看不到东西——用户会以为功能坏了，
+     * 所以在应用启动/回前台时顺手补一次，且每次进程只弹一次，不骚扰。</p>
+     */
+    private void checkNotificationPermission() {
+        if (!Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false)) {
+            return;
+        }
+        if (NotificationPermission.granted(this)) {
+            com.hyperosmod.singbox.PanelStatusService.start(this);
+            return;
+        }
+        if (!notificationPrompted) {
+            notificationPrompted = true;
+            NotificationPermission.request(this);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NotificationPermission.REQUEST_CODE) {
+            checkNotificationPermission();
+        }
     }
 
     @Override
@@ -157,6 +190,8 @@ public final class MainActivity extends AppCompatActivity {
                 R.string.group_telephony_summary, GroupSettingsActivity.GROUP_TELEPHONY);
         bindGroup(binding.rowGroupFcm, R.string.section_fcm,
                 R.string.group_fcm_summary, GroupSettingsActivity.GROUP_FCM);
+        bindGroup(binding.rowGroupNotifyIcon, R.string.section_notify_icon,
+                R.string.group_notify_icon_summary, GroupSettingsActivity.GROUP_NOTIFY_ICON);
     }
 
     private void bindGroup(com.hyperosmod.databinding.RowAppsBinding row, int title,
@@ -308,6 +343,7 @@ public final class MainActivity extends AppCompatActivity {
         pruneOne(Keys.BLOCKED_PACKAGES);
         pruneOne(Keys.TELEPHONY_TARGETS);
         pruneOne(Keys.FCM_TARGETS);
+        pruneOne(Keys.NOTIFY_ICON_TARGETS);
     }
 
     private void pruneOne(String key) {

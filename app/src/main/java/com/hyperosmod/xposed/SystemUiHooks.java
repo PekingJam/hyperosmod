@@ -56,6 +56,11 @@ final class SystemUiHooks {
         } catch (Throwable t) {
             Logs.e("Failed to install clock-seconds hooks", t);
         }
+        try {
+            new NotifyAppIconHook(xposed, classLoader).install();
+        } catch (Throwable t) {
+            Logs.e("Failed to install notification-icon hooks", t);
+        }
     }
 
     /**

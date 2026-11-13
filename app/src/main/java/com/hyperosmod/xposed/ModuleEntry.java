@@ -12,6 +12,9 @@ import io.github.libxposed.api.XposedModule;
  */
 public final class ModuleEntry extends XposedModule {
     private String processName = "";
+    /** 一个进程里只装一次通知图标 hook（同一个进程可能对应多个包）。 */
+    private static final java.util.concurrent.atomic.AtomicBoolean notifyIconInstalled =
+            new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -37,10 +40,21 @@ public final class ModuleEntry extends XposedModule {
 
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
+        String packageName = param.getPackageName();
+        // 通知图标同步要跑到每个目标应用自己的进程里，所以放在 firstPackage 判断之前。
+        if (notifyIconInstalled.compareAndSet(false, true)
+                && HookPrefs.getBoolean(com.hyperosmod.Keys.NOTIFY_ICON_ENABLED, false)
+                && HookPrefs.getStringSet(com.hyperosmod.Keys.NOTIFY_ICON_TARGETS)
+                .contains(packageName)) {
+            try {
+                new NotifyIconHook(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install notification-icon hooks", t);
+            }
+        }
         if (!param.isFirstPackage()) {
             return;
         }
-        String packageName = param.getPackageName();
         if ("com.android.systemui".equals(processName)
                 && "com.android.systemui".equals(packageName)) {
             try {

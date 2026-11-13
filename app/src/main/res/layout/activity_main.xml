@@ -306,6 +306,16 @@
                         <include
                             android:id="@+id/row_group_fcm"
                             layout="@layout/row_apps" />
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginStart="18dp"
+                            android:background="?attr/colorOutlineVariant" />
+
+                        <include
+                            android:id="@+id/row_group_notify_icon"
+                            layout="@layout/row_apps" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

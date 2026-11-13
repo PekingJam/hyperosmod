@@ -36,6 +36,7 @@ public final class GroupSettingsActivity extends AppCompatActivity {
     public static final String GROUP_TELEPHONY = "telephony";
     public static final String GROUP_FCM = "fcm";
     public static final String GROUP_FITNESS = "fitness";
+    public static final String GROUP_NOTIFY_ICON = "notify_icon";
 
     private ActivityGroupSettingsBinding binding;
     private LayoutInflater inflater;
@@ -65,6 +66,9 @@ public final class GroupSettingsActivity extends AppCompatActivity {
         } else if (GROUP_FITNESS.equals(group)) {
             binding.toolbar.setTitle(R.string.section_mifitness);
             buildFitness();
+        } else if (GROUP_NOTIFY_ICON.equals(group)) {
+            binding.toolbar.setTitle(R.string.section_notify_icon);
+            buildNotifyIcon();
         } else {
             binding.toolbar.setTitle(R.string.section_lockscreen);
             buildLockScreen();
@@ -77,6 +81,8 @@ public final class GroupSettingsActivity extends AppCompatActivity {
         UiUtils.applySystemBars(this);
         if (GROUP_FITNESS.equals(getIntent().getStringExtra(EXTRA_GROUP))) {
             updateFitnessRow();
+        } else if (GROUP_NOTIFY_ICON.equals(getIntent().getStringExtra(EXTRA_GROUP))) {
+            updateNotifyIconRow();
         }
     }
 
@@ -204,6 +210,63 @@ public final class GroupSettingsActivity extends AppCompatActivity {
         fitnessRow.getRoot().setOnClickListener(v ->
                 PermissionHelper.openDndAccessSettings(this));
         updateFitnessRow();
+    }
+
+    private void buildNotifyIcon() {
+        ViewSettingsCardBinding card = card();
+        RowSwitchBinding toggle = addSwitch(card, Keys.NOTIFY_ICON_ENABLED,
+                R.string.notify_icon_enabled_title, R.string.notify_icon_enabled_summary, false);
+        toggle.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.NOTIFY_ICON_ENABLED, checked);
+            if (checked) {
+                warnMissingScope();
+            }
+        });
+        notifyIconTargetsRow = addEntry(card, R.string.notify_icon_targets_title,
+                summaryOfNotifyIconTargets(), v -> {
+                    Intent intent = new Intent(this, BlockedAppsActivity.class);
+                    intent.putExtra(BlockedAppsActivity.EXTRA_MODE,
+                            BlockedAppsActivity.MODE_NOTIFY_ICON_TARGETS);
+                    startActivity(intent);
+                });
+    }
+
+    private RowAppsBinding notifyIconTargetsRow;
+
+    private void updateNotifyIconRow() {
+        if (notifyIconTargetsRow == null) {
+            return;
+        }
+        notifyIconTargetsRow.summary.setText(summaryOfNotifyIconTargets());
+    }
+
+    private String summaryOfNotifyIconTargets() {
+        Set<String> targets = Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS);
+        if (targets.isEmpty()) {
+            return getString(R.string.notify_icon_targets_summary_zero);
+        }
+        return getString(R.string.notify_icon_targets_summary, targets.size());
+    }
+
+    /** 目标应用必须同时被勾进 LSPosed 作用域，否则模块根本不会进它的进程。 */
+    private void warnMissingScope() {
+        for (String packageName : Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS)) {
+            if (!App.isInScope(packageName)) {
+                Toast.makeText(this, getString(R.string.notify_icon_scope_missing, appLabel(packageName)),
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+    }
+
+    private String appLabel(String packageName) {
+        try {
+            return getPackageManager()
+                    .getApplicationLabel(getPackageManager().getApplicationInfo(packageName, 0))
+                    .toString();
+        } catch (Throwable t) {
+            return packageName;
+        }
     }
 
     private RowAppsBinding fitnessRow;

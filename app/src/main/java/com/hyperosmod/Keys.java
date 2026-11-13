@@ -69,6 +69,11 @@ public final class Keys {
     /** SystemUI: show seconds in the status bar clock. */
     public static final String CLOCK_SECONDS = "status_bar_clock_seconds";
 
+    /** 通知图标跟随应用当前的桌面图标（换图标的应用专用）。 */
+    public static final String NOTIFY_ICON_ENABLED = "notify_icon_enabled";
+    /** Set&lt;String&gt; of packages whose notification icon should follow the launcher icon. */
+    public static final String NOTIFY_ICON_TARGETS = "notify_icon_targets";
+
     /** system_server: reject updates of the packages in {@link #BLOCKED_PACKAGES}. */
     public static final String BLOCK_UPDATES_ENABLED = "block_updates_enabled";
     /** Set&lt;String&gt; of package names whose updates must be rejected. */

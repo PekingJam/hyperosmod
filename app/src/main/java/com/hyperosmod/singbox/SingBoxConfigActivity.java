@@ -59,6 +59,10 @@ public final class SingBoxConfigActivity extends AppCompatActivity {
             }
         });
 
+        binding.btnNotifySettings.setOnClickListener(v ->
+                NotificationPermission.openSettings(this));
+        updateNotifyPermissionHint();
+
         binding.btnNotifyResend.setOnClickListener(v -> {
             Prefs.setBoolean(Keys.SINGBOX_NOTIFY, true);
             binding.switchNotify.setChecked(true);
@@ -88,16 +92,31 @@ public final class SingBoxConfigActivity extends AppCompatActivity {
         Prefs.setString(Keys.SINGBOX_API_SECRET, text(binding.apiSecret));
     }
 
-    /** Android 13 起通知需要运行时授权，没授权就弹一次。 */
+    /** 通知权限：交给统一入口处理，缺权限时同步更新提示与「去授权」按钮。 */
     private void requestNotificationPermission() {
-        if (android.os.Build.VERSION.SDK_INT < 33) {
-            return;
+        NotificationPermission.request(this);
+        updateNotifyPermissionHint();
+    }
+
+    private void updateNotifyPermissionHint() {
+        boolean granted = NotificationPermission.granted(this);
+        boolean enabled = Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false);
+        binding.btnNotifySettings.setVisibility(granted ? android.view.View.GONE
+                : android.view.View.VISIBLE);
+        binding.notifyHint.setVisibility(granted ? android.view.View.GONE
+                : android.view.View.VISIBLE);
+        if (granted && enabled) {
+            PanelStatusService.start(this);
         }
-        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            return;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NotificationPermission.REQUEST_CODE) {
+            updateNotifyPermissionHint();
         }
-        requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 11);
     }
 
     private String text(android.widget.EditText edit) {
