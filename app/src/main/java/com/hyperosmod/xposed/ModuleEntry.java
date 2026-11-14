@@ -13,7 +13,7 @@ import io.github.libxposed.api.XposedModule;
 public final class ModuleEntry extends XposedModule {
     private String processName = "";
     /** 一个进程里只装一次通知图标 hook（同一个进程可能对应多个包）。 */
-    private static final java.util.concurrent.atomic.AtomicBoolean notifyIconInstalled =
+    private static final java.util.concurrent.atomic.AtomicBoolean iconHooksInstalled =
             new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
@@ -41,17 +41,7 @@ public final class ModuleEntry extends XposedModule {
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
         String packageName = param.getPackageName();
-        // 通知图标同步要跑到每个目标应用自己的进程里，所以放在 firstPackage 判断之前。
-        if (notifyIconInstalled.compareAndSet(false, true)
-                && HookPrefs.getBoolean(com.hyperosmod.Keys.NOTIFY_ICON_ENABLED, false)
-                && HookPrefs.getStringSet(com.hyperosmod.Keys.NOTIFY_ICON_TARGETS)
-                .contains(packageName)) {
-            try {
-                new NotifyIconHook(this, param.getClassLoader()).install();
-            } catch (Throwable t) {
-                Logs.e("Failed to install notification-icon hooks", t);
-            }
-        }
+        installNotifyIconHooks(param, packageName);
         if (!param.isFirstPackage()) {
             return;
         }
@@ -94,6 +84,45 @@ public final class ModuleEntry extends XposedModule {
             } catch (Throwable t) {
                 Logs.e("Failed to install FCM powerkeeper hooks", t);
             }
+        }
+    }
+
+    /**
+     * 通知图标同步。
+     *
+     * <p>不猜「哪个应用负责画图标」：只要进程被注入了（= 用户勾进了作用域）就装上图标来源
+     * 改写，真正生效与否由目标包名名单在运行期判断。这样换 ROM、换 AOD 实现都不用再改代码。</p>
+     *
+     * <p>system_server 排除在外：那里的 Resources / PackageItemInfo 调用太密集，而且
+     * 系统进程也不需要这个功能。</p>
+     */
+    private void installNotifyIconHooks(PackageReadyParam param, String packageName) {
+        if ("android".equals(packageName) || "android".equals(processName)) {
+            return;
+        }
+        if (!HookPrefs.getBoolean(com.hyperosmod.Keys.NOTIFY_ICON_ENABLED, false)) {
+            return;
+        }
+        if (!iconHooksInstalled.compareAndSet(false, true)) {
+            return;
+        }
+        Logs.i("notify-icon: 进程 " + processName + " 安装图标 hook");
+        if (HookPrefs.getStringSet(com.hyperosmod.Keys.NOTIFY_ICON_TARGETS).contains(packageName)) {
+            try {
+                new NotifyIconHook(this, param.getClassLoader()).install();
+            } catch (Throwable t) {
+                Logs.e("Failed to install Notification.Builder hooks", t);
+            }
+        }
+        try {
+            new NotifyAppIconHook(this, param.getClassLoader()).install();
+        } catch (Throwable t) {
+            Logs.e("Failed to install app-icon hooks", t);
+        }
+        try {
+            new AodIconHook(this, param.getClassLoader()).install();
+        } catch (Throwable t) {
+            Logs.e("Failed to install AOD view hooks", t);
         }
     }
 }

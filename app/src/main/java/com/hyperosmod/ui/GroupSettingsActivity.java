@@ -1,5 +1,8 @@
 package com.hyperosmod.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -229,8 +232,64 @@ public final class GroupSettingsActivity extends AppCompatActivity {
                             BlockedAppsActivity.MODE_NOTIFY_ICON_TARGETS);
                     startActivity(intent);
                 });
+        notifyIconScopeRow = addEntry(card, R.string.notify_icon_scope_title,
+                scopeSummary(), v -> {
+                    updateNotifyIconRow();
+                    warnMissingScope();
+                });
+        notifyIconAodRow = addEntry(card, R.string.notify_icon_aod_title,
+                aodSummary(), v -> {
+                    updateNotifyIconRow();
+                    warnMissingScope();
+                });
+        addEntry(card, R.string.notify_icon_diag_row,
+                getString(R.string.notify_icon_diag_summary),
+                v -> showRuntimeDiagnostics());
+        updateNotifyIconRow();
     }
 
+    /** 息屏显示到底是不是 com.miui.aod 在画、进程有没有起来——直接问系统，别猜。 */
+    private static final String DIAG_COMMAND = "echo '=== AOD 进程 ==='; "
+            + "ps -A -o PID,NAME,ARGS 2>/dev/null | grep -i aod; "
+            + "echo; echo '=== 含 aod / doze 的包 ==='; "
+            + "pm list packages 2>/dev/null | grep -i -E 'aod|doze'; "
+            + "echo; echo '=== 相关属性 ==='; "
+            + "getprop 2>/dev/null | grep -i -E 'aod|doze'";
+
+    private void showRuntimeDiagnostics() {
+        if (!com.hyperosmod.singbox.RootShell.hasRoot()) {
+            Toast.makeText(this, R.string.notify_icon_diag_no_root, Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, R.string.notify_icon_diag_running, Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            final String output = com.hyperosmod.singbox.RootShell.exec(DIAG_COMMAND, 20).output;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.notify_icon_diag_title)
+                        .setMessage(output.trim().isEmpty()
+                                ? getString(R.string.notify_icon_diag_empty) : output)
+                        .setNegativeButton(R.string.action_close, null)
+                        .setNeutralButton(R.string.action_copy, (dialog, which) -> {
+                            ClipboardManager clipboard = (ClipboardManager)
+                                    getSystemService(Context.CLIPBOARD_SERVICE);
+                            if (clipboard != null) {
+                                clipboard.setPrimaryClip(
+                                        ClipData.newPlainText("aod-diag", output));
+                            }
+                            Toast.makeText(this, R.string.singbox_log_copied,
+                                    Toast.LENGTH_SHORT).show();
+                        })
+                        .show();
+            });
+        }, "aod-diag").start();
+    }
+
+    private RowAppsBinding notifyIconScopeRow;
+    private RowAppsBinding notifyIconAodRow;
     private RowAppsBinding notifyIconTargetsRow;
 
     private void updateNotifyIconRow() {
@@ -238,6 +297,87 @@ public final class GroupSettingsActivity extends AppCompatActivity {
             return;
         }
         notifyIconTargetsRow.summary.setText(summaryOfNotifyIconTargets());
+        if (notifyIconScopeRow != null) {
+            notifyIconScopeRow.summary.setText(scopeSummary());
+        }
+        if (notifyIconAodRow != null) {
+            notifyIconAodRow.summary.setText(aodSummary());
+        }
+    }
+
+    /** 「系统界面 ✓ · 息屏显示 ✗ · 目标应用 ✓」——漏勾哪个一眼就能看出来。 */
+    private String scopeSummary() {
+        Set<String> targets = Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS);
+        boolean targetsInScope = true;
+        for (String packageName : targets) {
+            if (!App.isInScope(packageName)) {
+                targetsInScope = false;
+                break;
+            }
+        }
+        String aodMark;
+        java.util.List<String> aod = aodPackages();
+        if (aod.isEmpty()) {
+            aodMark = getString(R.string.notify_icon_scope_absent);
+        } else {
+            boolean any = false;
+            for (String packageName : aod) {
+                if (App.isInScope(packageName)) {
+                    any = true;
+                    break;
+                }
+            }
+            aodMark = mark(any);
+        }
+        return getString(R.string.notify_icon_scope_row,
+                mark(App.isInScope("com.android.systemui")),
+                aodMark,
+                mark(!targets.isEmpty() && targetsInScope));
+    }
+
+    /** 设备上可能负责息屏显示图标的包；HyperOS 是 com.miui.aod，别的 ROM 可能叫法不同。 */
+    private static java.util.List<String> AOD_PACKAGES;
+
+    private java.util.List<String> aodPackages() {
+        if (AOD_PACKAGES != null) {
+            return AOD_PACKAGES;
+        }
+        java.util.List<String> found = new java.util.ArrayList<>();
+        try {
+            for (android.content.pm.PackageInfo info
+                    : getPackageManager().getInstalledPackages(0)) {
+                String name = info.packageName.toLowerCase(java.util.Locale.ROOT);
+                if (name.contains("aod") || name.contains("alwayson")) {
+                    found.add(info.packageName);
+                }
+            }
+        } catch (Throwable ignored) {
+            // 拿不到列表就当作没找到，下面会给出提示文案。
+        }
+        AOD_PACKAGES = found;
+        return found;
+    }
+
+    private String aodSummary() {
+        java.util.List<String> packages = aodPackages();
+        if (packages.isEmpty()) {
+            return getString(R.string.notify_icon_aod_none);
+        }
+        StringBuilder builder = new StringBuilder();
+        for (String packageName : packages) {
+            if (builder.length() > 0) {
+                builder.append(" · ");
+            }
+            builder.append(packageName).append(' ')
+                    .append(App.isInScope(packageName)
+                            ? getString(R.string.notify_icon_scope_ok)
+                            : getString(R.string.notify_icon_scope_no));
+        }
+        return builder.toString();
+    }
+
+    private String mark(boolean ok) {
+        return getString(ok ? R.string.notify_icon_scope_ok : R.string.notify_icon_scope_no);
     }
 
     private String summaryOfNotifyIconTargets() {
@@ -250,12 +390,33 @@ public final class GroupSettingsActivity extends AppCompatActivity {
 
     /** 目标应用必须同时被勾进 LSPosed 作用域，否则模块根本不会进它的进程。 */
     private void warnMissingScope() {
-        for (String packageName : Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS)) {
-            if (!App.isInScope(packageName)) {
-                Toast.makeText(this, getString(R.string.notify_icon_scope_missing, appLabel(packageName)),
-                        Toast.LENGTH_LONG).show();
+        // SystemUI 与息屏显示都要进作用域：前者管通知面板/锁屏，后者管 AOD。
+        String[] required = {"com.android.systemui", "com.miui.aod"};
+        for (String packageName : required) {
+            if (isInstalled(packageName) && !App.isInScope(packageName)) {
+                warnScope(packageName);
                 return;
             }
+        }
+        for (String packageName : Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS)) {
+            if (!App.isInScope(packageName)) {
+                warnScope(packageName);
+                return;
+            }
+        }
+    }
+
+    private void warnScope(String packageName) {
+        Toast.makeText(this, getString(R.string.notify_icon_scope_missing, appLabel(packageName)),
+                Toast.LENGTH_LONG).show();
+    }
+
+    private boolean isInstalled(String packageName) {
+        try {
+            getPackageManager().getApplicationInfo(packageName, 0);
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 

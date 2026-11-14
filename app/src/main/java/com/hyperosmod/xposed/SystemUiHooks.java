@@ -56,11 +56,7 @@ final class SystemUiHooks {
         } catch (Throwable t) {
             Logs.e("Failed to install clock-seconds hooks", t);
         }
-        try {
-            new NotifyAppIconHook(xposed, classLoader).install();
-        } catch (Throwable t) {
-            Logs.e("Failed to install notification-icon hooks", t);
-        }
+        // 通知图标的应用图标改写由 ModuleEntry 统一装（它对每个注入进程都装一次）。
     }
 
     /**

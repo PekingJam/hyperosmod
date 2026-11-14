@@ -3,6 +3,7 @@ package com.hyperosmod.ui;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.Toast;
 
@@ -26,6 +27,8 @@ import com.hyperosmod.singbox.PanelFragment;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -41,6 +44,8 @@ public final class MainActivity extends AppCompatActivity {
     private boolean dndPromptShown;
     /** 本次进程内只提示一次通知权限，别每次回到前台都弹。 */
     private boolean notificationPrompted;
+    /** 作用域缺口只提示一次。 */
+    private boolean notifyIconScopePrompted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,6 +115,77 @@ public final class MainActivity extends AppCompatActivity {
         refreshAll();
         checkPermissions();
         checkNotificationPermission();
+        checkNotifyIconScope();
+    }
+
+    /**
+     * 通知图标同步开着、但有该进作用域的进程没勾时，直接把缺口摆到脸上。
+     *
+     * <p>这个功能的「没生效」里绝大多数是作用域没勾全：模块不会被注入那个进程，日志里
+     * 连一行都看不到，用户只会觉得功能坏了。</p>
+     */
+    private void checkNotifyIconScope() {
+        if (notifyIconScopePrompted
+                || !Prefs.getBoolean(Keys.NOTIFY_ICON_ENABLED, false)
+                || !App.isActivated()) {
+            return;
+        }
+        List<String> missing = new ArrayList<>();
+        if (!App.isInScope("com.android.systemui")) {
+            missing.add(getString(R.string.notify_icon_scope_systemui));
+        }
+        if (isInstalled("com.miui.aod") && !App.isInScope("com.miui.aod")) {
+            missing.add(getString(R.string.notify_icon_scope_aod));
+        }
+        for (String packageName : Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS)) {
+            if (!App.isInScope(packageName)) {
+                missing.add(appLabel(packageName));
+            }
+        }
+        if (missing.isEmpty()) {
+            return;
+        }
+        notifyIconScopePrompted = true;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.notify_icon_scope_dialog_title)
+                .setMessage(getString(R.string.notify_icon_scope_dialog_message,
+                        TextUtils.join("、", missing)))
+                .setNegativeButton(R.string.later, null)
+                .setPositiveButton(R.string.notify_icon_scope_dialog_open,
+                        (dialog, which) -> openLsposedManager())
+                .show();
+    }
+
+    private void openLsposedManager() {
+        try {
+            Intent intent = getPackageManager().getLaunchIntentForPackage("org.lsposed.manager");
+            if (intent != null) {
+                startActivity(intent);
+                return;
+            }
+        } catch (Throwable ignored) {
+            // 落到下面的提示。
+        }
+        Toast.makeText(this, R.string.notify_icon_scope_dialog_manual, Toast.LENGTH_LONG).show();
+    }
+
+    private boolean isInstalled(String packageName) {
+        try {
+            getPackageManager().getApplicationInfo(packageName, 0);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private String appLabel(String packageName) {
+        try {
+            return getPackageManager()
+                    .getApplicationLabel(getPackageManager().getApplicationInfo(packageName, 0))
+                    .toString();
+        } catch (Throwable t) {
+            return packageName;
+        }
     }
 
     /**
