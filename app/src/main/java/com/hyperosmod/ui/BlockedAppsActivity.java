@@ -37,6 +37,7 @@ public final class BlockedAppsActivity extends AppCompatActivity {
     public static final int MODE_TELEPHONY_TARGETS = 1;
     public static final int MODE_FCM_TARGETS = 2;
     public static final int MODE_NOTIFY_ICON_TARGETS = 3;
+    public static final int MODE_KEYGUARD_NOTIFY_TARGETS = 4;
 
     private ActivityBlockedAppsBinding binding;
     private AppListAdapter adapter;
@@ -55,13 +56,23 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         UiUtils.applySystemBars(this);
 
         mode = getIntent().getIntExtra(EXTRA_MODE, MODE_BLOCK_UPDATES);
-        storeKey = mode == MODE_TELEPHONY_TARGETS
-                ? Keys.TELEPHONY_TARGETS
-                : (mode == MODE_FCM_TARGETS
-                        ? Keys.FCM_TARGETS
-                        : (mode == MODE_NOTIFY_ICON_TARGETS
-                                ? Keys.NOTIFY_ICON_TARGETS
-                                : Keys.BLOCKED_PACKAGES));
+        switch (mode) {
+            case MODE_TELEPHONY_TARGETS:
+                storeKey = Keys.TELEPHONY_TARGETS;
+                break;
+            case MODE_FCM_TARGETS:
+                storeKey = Keys.FCM_TARGETS;
+                break;
+            case MODE_NOTIFY_ICON_TARGETS:
+                storeKey = Keys.NOTIFY_ICON_TARGETS;
+                break;
+            case MODE_KEYGUARD_NOTIFY_TARGETS:
+                storeKey = Keys.KEYGUARD_NOTIFY_TARGETS;
+                break;
+            default:
+                storeKey = Keys.BLOCKED_PACKAGES;
+                break;
+        }
 
         setSupportActionBar(binding.toolbar);
         if (getSupportActionBar() != null) {
@@ -74,6 +85,8 @@ public final class BlockedAppsActivity extends AppCompatActivity {
             titleRes = R.string.fcm_targets_picker_title;
         } else if (mode == MODE_NOTIFY_ICON_TARGETS) {
             titleRes = R.string.notify_icon_targets_picker_title;
+        } else if (mode == MODE_KEYGUARD_NOTIFY_TARGETS) {
+            titleRes = R.string.keyguard_notify_targets_picker_title;
         } else {
             titleRes = R.string.app_picker_title;
         }

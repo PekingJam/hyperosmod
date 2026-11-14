@@ -62,7 +62,8 @@ final class SystemUiHooks {
     /**
      * HyperCeiler: NotificationShowOnKeyguard
      * {@code ExpandedNotification#canShowOnKeyguard()} returns whether a notification may
-     * be shown on the lock screen. Force it to {@code true}.
+     * be shown on the lock screen. Only the packages picked in the whitelist are forced to
+     * {@code true}; everything else keeps the system / app decision.
      */
     private void hookCanShowOnKeyguard() {
         Class<?> type = Reflect.findClass(classLoader,
@@ -81,8 +82,16 @@ final class SystemUiHooks {
             xposed.hook(candidate)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
-                        if (HookPrefs.getBoolean(Keys.UNLOCK_NOTIFICATION_RESTRICT, false)) {
-                            return Boolean.TRUE;
+                        if (HookPrefs.getBoolean(Keys.KEYGUARD_NOTIFY_TARGETS_ENABLED, false)) {
+                            java.util.Set<String> targets =
+                                    HookPrefs.getStringSet(Keys.KEYGUARD_NOTIFY_TARGETS);
+                            if (!targets.isEmpty()) {
+                                String packageName = packageNameOf(chain.getThisObject());
+                                if (packageName != null && targets.contains(packageName)) {
+                                    logWhitelisted(packageName);
+                                    return Boolean.TRUE;
+                                }
+                            }
                         }
                         return chain.proceed();
                     });
@@ -92,6 +101,33 @@ final class SystemUiHooks {
             Logs.w("ExpandedNotification#canShowOnKeyguard not found; skip", null);
         } else {
             Logs.i("Hooked ExpandedNotification#canShowOnKeyguard");
+        }
+    }
+
+    /** 通知归属的包名；ExpandedNotification 继承 StatusBarNotification，直接转型最快。 */
+    private static String packageNameOf(Object notification) {
+        if (notification == null) {
+            return null;
+        }
+        try {
+            if (notification instanceof android.service.notification.StatusBarNotification) {
+                return ((android.service.notification.StatusBarNotification) notification)
+                        .getPackageName();
+            }
+        } catch (Throwable ignored) {
+            // 走下面的反射兜底。
+        }
+        Object value = Reflect.call(notification, "getPackageName");
+        return value instanceof String ? (String) value : null;
+    }
+
+    /** 同一包只打一行：锁屏每次都问一遍，热路径不要刷屏。 */
+    private final java.util.Set<String> whitelistLogged =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void logWhitelisted(String packageName) {
+        if (whitelistLogged.add(packageName)) {
+            Logs.i("锁屏通知白名单命中：" + packageName);
         }
     }
 

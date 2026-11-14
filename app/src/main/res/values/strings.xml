@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HyperOS Mod</string>
-    <string name="xposed_description">解锁锁屏通知限制、解锁后保留通知、自定义主题色、双排信号图标，并阻止指定应用被更新。</string>
+    <string name="xposed_description">锁屏通知白名单、解锁后保留通知、自定义主题色、双排信号图标，并阻止指定应用被更新。</string>
 
     <string name="status_title">模块状态</string>
     <string name="status_active">已连接 LSPosed</string>
@@ -29,15 +29,20 @@
     <string name="section_telephony">电话 / SIM 信息</string>
     <string name="section_fcm">FCM 推送修复</string>
     <string name="section_system_group">系统功能</string>
-    <string name="group_lock_summary">双击手势提示线锁屏、上滑通知限制、保留通知</string>
+    <string name="group_lock_summary">双击手势提示线锁屏、锁屏通知白名单、保留通知</string>
     <string name="group_fitness_summary">小米运动健康免打扰同步与权限</string>
     <string name="group_update_summary">阻止应用自动更新，并选择要保护的应用</string>
     <string name="group_telephony_summary">伪装电话与 SIM 信息，选择生效的应用</string>
     <string name="group_fcm_summary">修复 HyperOS 下的 FCM 推送延迟与丢失</string>
     <string name="section_tools">工具</string>
 
-    <string name="unlock_notification_title">解除通知限制</string>
-    <string name="unlock_notification_summary">让所有通知都可以在锁屏页显示</string>
+    <string name="keyguard_notify_enabled_title">锁屏通知白名单</string>
+    <string name="keyguard_notify_enabled_summary">勾选的应用一定会在锁屏显示通知；没勾选的跟随系统与各应用自己的锁屏通知设置</string>
+    <string name="keyguard_notify_targets_title">允许在锁屏显示的应用</string>
+    <string name="keyguard_notify_targets_summary_zero">尚未选择应用（全部跟随系统设置）</string>
+    <string name="keyguard_notify_targets_summary">已选择 %1$d 个应用</string>
+    <string name="keyguard_notify_targets_picker_title">选择可在锁屏显示通知的应用</string>
+    <string name="keyguard_notify_scope_missing">系统界面（com.android.systemui）还没加入本模块的 LSPosed 作用域，锁屏通知白名单不会生效，请在 LSPosed 里勾选后重启系统界面</string>
     <string name="keep_notification_title">解锁后保留通知</string>
     <string name="keep_notification_summary">解锁后锁屏通知不会自动清除，直到被手动清除</string>
 

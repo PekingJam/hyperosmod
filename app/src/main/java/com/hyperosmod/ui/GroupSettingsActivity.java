@@ -86,6 +86,8 @@ public final class GroupSettingsActivity extends AppCompatActivity {
             updateFitnessRow();
         } else if (GROUP_NOTIFY_ICON.equals(getIntent().getStringExtra(EXTRA_GROUP))) {
             updateNotifyIconRow();
+        } else if (GROUP_LOCK.equals(getIntent().getStringExtra(EXTRA_GROUP))) {
+            updateKeyguardNotifyRow();
         }
     }
 
@@ -157,10 +159,41 @@ public final class GroupSettingsActivity extends AppCompatActivity {
                         Toast.LENGTH_LONG).show();
             }
         });
-        addSwitch(card, Keys.UNLOCK_NOTIFICATION_RESTRICT,
-                R.string.unlock_notification_title, R.string.unlock_notification_summary, false);
+        RowSwitchBinding keyguardNotify = addSwitch(card, Keys.KEYGUARD_NOTIFY_TARGETS_ENABLED,
+                R.string.keyguard_notify_enabled_title, R.string.keyguard_notify_enabled_summary,
+                false);
+        keyguardNotify.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.KEYGUARD_NOTIFY_TARGETS_ENABLED, checked);
+            if (checked && !App.isInScope("com.android.systemui")) {
+                Toast.makeText(this, R.string.keyguard_notify_scope_missing,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+        keyguardNotifyRow = addEntry(card, R.string.keyguard_notify_targets_title,
+                summaryOfKeyguardNotifyTargets(), v -> {
+                    Intent intent = new Intent(this, BlockedAppsActivity.class);
+                    intent.putExtra(BlockedAppsActivity.EXTRA_MODE,
+                            BlockedAppsActivity.MODE_KEYGUARD_NOTIFY_TARGETS);
+                    startActivity(intent);
+                });
         addSwitch(card, Keys.KEEP_NOTIFICATION,
                 R.string.keep_notification_title, R.string.keep_notification_summary, false);
+    }
+
+    private RowAppsBinding keyguardNotifyRow;
+
+    private void updateKeyguardNotifyRow() {
+        if (keyguardNotifyRow != null) {
+            keyguardNotifyRow.summary.setText(summaryOfKeyguardNotifyTargets());
+        }
+    }
+
+    private String summaryOfKeyguardNotifyTargets() {
+        Set<String> targets = Prefs.getStringSet(Keys.KEYGUARD_NOTIFY_TARGETS);
+        if (targets.isEmpty()) {
+            return getString(R.string.keyguard_notify_targets_summary_zero);
+        }
+        return getString(R.string.keyguard_notify_targets_summary, targets.size());
     }
 
     private void buildUpdate() {

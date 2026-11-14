@@ -10,8 +10,10 @@ public final class Keys {
     public static final String PREFS_FILE = "hyperosmod";
     public static final String REMOTE_GROUP = "hyperosmod_prefs";
 
-    /** SystemUI: let every notification be shown on the keyguard. */
-    public static final String UNLOCK_NOTIFICATION_RESTRICT = "unlock_notification_restrict";
+    /** SystemUI: force the packages in {@link #KEYGUARD_NOTIFY_TARGETS} onto the keyguard. */
+    public static final String KEYGUARD_NOTIFY_TARGETS_ENABLED = "keyguard_notify_targets_enabled";
+    /** Set&lt;String&gt; of packages whose notifications are always shown on the keyguard. */
+    public static final String KEYGUARD_NOTIFY_TARGETS = "keyguard_notify_targets";
     /** SystemUI: keep keyguard notifications after unlocking. */
     public static final String KEEP_NOTIFICATION = "keep_notification";
     /** sing-box：磁贴长按打开应用时优先显示网页。 */
