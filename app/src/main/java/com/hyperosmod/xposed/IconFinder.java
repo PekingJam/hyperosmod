@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 在子树上比对，最后再按名字关键字兜底。</p>
  */
 final class IconFinder {
-    private final Map<String, Integer> resourceIds = new ConcurrentHashMap<>();
 
     View byName(View root, String name) {
         if (root == null) {
@@ -110,11 +109,25 @@ final class IconFinder {
 
     int idFor(Context context, String name) {
         String packageName = context.getPackageName();
-        String key = packageName + ':' + name;
-        Integer cached = resourceIds.get(key);
-        if (cached != null) {
-            return cached;
+        // 同一个进程里 context 的包名基本是常量，缓存住就不用每次拼 key 字符串。
+        if (packageName.equals(cachedPackage) && !idsByName.isEmpty()) {
+            Integer cached = idsByName.get(name);
+            if (cached != null) {
+                return cached;
+            }
+        } else if (!packageName.equals(cachedPackage)) {
+            idsByName.clear();
+            cachedPackage = packageName;
         }
+        int id = resolveId(context, name, packageName);
+        idsByName.put(name, id);
+        return id;
+    }
+
+    private volatile String cachedPackage = "";
+    private final Map<String, Integer> idsByName = new ConcurrentHashMap<>();
+
+    private static int resolveId(Context context, String name, String packageName) {
         int id = 0;
         try {
             Resources resources = context.getResources();
@@ -129,7 +142,6 @@ final class IconFinder {
                 // 保持 0。
             }
         }
-        resourceIds.put(key, id);
         return id;
     }
 }

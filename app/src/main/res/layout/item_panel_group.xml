@@ -40,16 +40,11 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceTitleSmall"
-                android:textColor="?attr/colorPrimary" />
-
-            <TextView
-                android:id="@+id/group_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:textAppearance="?attr/textAppearanceBodySmall"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:textSize="11sp" />
+                android:textColor="?attr/colorPrimary"
+                app:autoSizeMaxTextSize="14sp"
+                app:autoSizeMinTextSize="9sp"
+                app:autoSizeStepGranularity="1sp"
+                app:autoSizeTextType="uniform" />
 
             <TextView
                 android:id="@+id/group_chevron"
@@ -65,9 +60,14 @@
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="0dp"
                 android:minWidth="0dp"
                 android:paddingStart="8dp"
+                android:paddingTop="2dp"
                 android:paddingEnd="8dp"
+                android:paddingBottom="2dp"
                 android:text="@string/panel_test_group"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -76,6 +76,7 @@
             android:id="@+id/node_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:orientation="vertical" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -22,7 +22,6 @@ public final class Keys {
     public static final String SINGBOX_API_URL = "singbox_api_url";
     public static final String SINGBOX_API_SECRET = "singbox_api_secret";
     /** 通知栏常驻显示网速与当前节点。 */
-    public static final String SINGBOX_NOTIFY = "singbox_notify";
 
     /** sing-box：配置文件下载地址（面板里可改，脚本会自己记住）。 */
     public static final String SINGBOX_CONFIG_URL = "singbox_config_url";

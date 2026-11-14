@@ -1,16 +1,19 @@
 package com.hyperosmod.singbox;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
+import android.text.style.ForegroundColorSpan;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -33,7 +36,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 原生控制面板：直连 sing-box 的 Clash 接口，替代原来的 WebView 面板。
@@ -50,8 +52,12 @@ public final class PanelFragment extends Fragment {
     private final Adapter adapter = new Adapter();
 
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4);
-    private final AtomicBoolean trafficRunning = new AtomicBoolean(false);
     private ClashApi api;
+
+    /** 切到面板页时自动跑一次全量测速；间隔太近就不重复跑，免得费电。 */
+    private static final long AUTO_TEST_INTERVAL_MS = 60_000L;
+    private long lastAutoTestAt;
+    private boolean autoTestPending;
 
     /** 节点类型（Vmess / Shadowsocks …），用于节点行第二段文字。 */
     private final Map<String, String> types = new HashMap<>();
@@ -60,8 +66,6 @@ public final class PanelFragment extends Fragment {
     private final Map<String, Boolean> testing = new HashMap<>();
 
     private final List<ClashApi.Group> groups = new ArrayList<>();
-    private final Handler statsHandler = new Handler(Looper.getMainLooper());
-    private boolean statsRefreshing;
 
     /** 当前打开的弹窗列表，测速/切换后需要刷新它。 */
     private NodeAdapter openSheet;
@@ -85,7 +89,12 @@ public final class PanelFragment extends Fragment {
         binding.btnTestAll.setOnClickListener(v -> testAll());
         binding.btnConnections.setOnClickListener(v ->
                 startActivity(new Intent(requireContext(), ConnectionsActivity.class)));
+        binding.sessionCard.setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), ConnectionsActivity.class)));
         load();
+        if (autoTestPending) {
+            autoTestIfDue();
+        }
     }
 
     @Override
@@ -93,76 +102,35 @@ public final class PanelFragment extends Fragment {
         super.onResume();
         if (binding != null) {
             load();
-            statsHandler.post(statsTick);
         }
     }
 
-    @Override
-    public void onPause() {
-        statsHandler.removeCallbacks(statsTick);
-        super.onPause();
-    }
-
-    /** 顶部统计：累计上传/下载 + 活动连接数，3 秒取一次。 */
-    private final Runnable statsTick = new Runnable() {
-        @Override
-        public void run() {
-            refreshStats();
-            statsHandler.postDelayed(this, 3000L);
-        }
-    };
-
-    private void refreshStats() {
-        if (binding == null || statsRefreshing) {
+    /** 主界面切到本 tab 时调用：按需自动跑一次全量测速。 */
+    public void onTabVisible() {
+        if (binding == null) {
+            autoTestPending = true;
             return;
         }
-        statsRefreshing = true;
-        ClashApi client = api();
-        EXECUTOR.execute(() -> {
-            long up = 0;
-            long down = 0;
-            int count = 0;
-            try {
-                ClashApi.Connections connections = client.connections();
-                up = connections.uploadTotal;
-                down = connections.downloadTotal;
-                count = connections.items.size();
-            } catch (Throwable ignored) {
-                // 控制接口不可达时保留上一帧的数字
-            }
-            final long finalUp = up;
-            final long finalDown = down;
-            final int finalCount = count;
-            runOnUi(() -> {
-                statsRefreshing = false;
-                if (binding == null) {
-                    return;
-                }
-                binding.panelStats.setText(getString(R.string.panel_stats,
-                        formatBytes(finalUp), formatBytes(finalDown), finalCount));
-            });
-        });
+        autoTestIfDue();
     }
 
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
+    private void autoTestIfDue() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - lastAutoTestAt < AUTO_TEST_INTERVAL_MS) {
+            return;
         }
-        if (bytes < 1024 * 1024) {
-            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024f);
+        if (groups.isEmpty()) {
+            // 分组还没拉回来，等 render() 之后再测。
+            autoTestPending = true;
+            return;
         }
-        if (bytes < 1024L * 1024 * 1024) {
-            return String.format(Locale.ROOT, "%.1f MB", bytes / 1048576f);
-        }
-        return String.format(Locale.ROOT, "%.2f GB", bytes / 1073741824f);
+        autoTestPending = false;
+        lastAutoTestAt = now;
+        testAll();
     }
 
     @Override
     public void onDestroyView() {
-        if (api != null) {
-            api.stopTraffic();
-        }
-        trafficRunning.set(false);
         openSheet = null;
         binding = null;
         super.onDestroyView();
@@ -186,6 +154,7 @@ public final class PanelFragment extends Fragment {
         }
         ClashApi client = api();
         if (!client.configured()) {
+            setBackendStatus(R.string.panel_backend_unconfigured, null, R.color.accent_amber);
             binding.panelEmpty.setVisibility(View.VISIBLE);
             binding.panelEmpty.setText(R.string.panel_not_configured);
             binding.panelList.setVisibility(View.GONE);
@@ -197,6 +166,24 @@ public final class PanelFragment extends Fragment {
                 String version = client.version();
                 Map<String, String> fetched = new HashMap<>();
                 List<ClashApi.Group> loaded = client.groups(fetched);
+                // 连接快照只在刷新时取一次，不轮询、不开长连接。
+                long upload = 0;
+                long download = 0;
+                int connCount = 0;
+                boolean hasConnections = false;
+                try {
+                    ClashApi.Connections connections = client.connections();
+                    upload = connections.uploadTotal;
+                    download = connections.downloadTotal;
+                    connCount = connections.items.size();
+                    hasConnections = true;
+                } catch (Throwable ignored) {
+                    // 连接接口单独失败不影响分组列表。
+                }
+                final long finalUpload = upload;
+                final long finalDownload = download;
+                final int finalConnCount = connCount;
+                final boolean finalHasConnections = hasConnections;
                 runOnUi(() -> {
                     if (binding == null) {
                         return;
@@ -204,10 +191,14 @@ public final class PanelFragment extends Fragment {
                     binding.panelProgress.setVisibility(View.GONE);
                     types.clear();
                     types.putAll(fetched);
-                    binding.panelHint.setText(version.isEmpty() ? ""
-                            : getString(R.string.panel_version, version));
+                    String versionText = normalizeVersion(version);
+                    setBackendStatus(versionText.isEmpty()
+                                    ? R.string.panel_backend_connected : R.string.panel_backend_ok,
+                            versionText.isEmpty() ? null : versionText,
+                            R.color.accent_green);
                     render(loaded);
-                    startTraffic();
+                    updateSessionCard(finalUpload, finalDownload,
+                            finalConnCount, finalHasConnections);
                 });
             } catch (Throwable t) {
                 runOnUi(() -> {
@@ -215,6 +206,8 @@ public final class PanelFragment extends Fragment {
                         return;
                     }
                     binding.panelProgress.setVisibility(View.GONE);
+                    setBackendStatus(R.string.panel_backend_failed,
+                            String.valueOf(t.getMessage()), R.color.accent_red);
                     binding.panelEmpty.setVisibility(View.VISIBLE);
                     binding.panelEmpty.setText(getString(R.string.panel_unreachable, t.getMessage()));
                     binding.panelList.setVisibility(View.GONE);
@@ -223,22 +216,67 @@ public final class PanelFragment extends Fragment {
         });
     }
 
-    private void render(List<ClashApi.Group> loaded) {
-        String currentNode = "";
-        String currentGroup = "";
-        for (ClashApi.Group group : loaded) {
-            // GLOBAL 只在全局模式下才有意义，顶部不显示它。
-            if ("GLOBAL".equalsIgnoreCase(group.name) || group.now.isEmpty()) {
-                continue;
-            }
-            currentNode = group.now;
-            currentGroup = group.name;
-            break;
+    /**
+     * 控制接口返回的 version 有的带「sing-box 」前缀、有的只有号码，
+     * 统一成一处前缀，避免出现「sing-box sing-box 1.x」。
+     */
+    private static String normalizeVersion(String version) {
+        if (version == null) {
+            return "";
         }
-        binding.panelNode.setText(currentNode.isEmpty()
-                ? getString(R.string.panel_current_none)
-                : getString(R.string.panel_current, currentNode, currentGroup));
+        String text = version.trim();
+        if (text.isEmpty()) {
+            return "";
+        }
+        return text.toLowerCase(Locale.ROOT).startsWith("sing-box") ? text : "sing-box " + text;
+    }
 
+    /** 会话概览卡第二行：活跃连接数与累计流量（一次快照，不轮询）。 */
+    private void updateSessionCard(long upload, long download, int connections,
+                                   boolean hasConnections) {
+        if (binding == null) {
+            return;
+        }
+        if (!hasConnections) {
+            binding.sessionMeta.setText(R.string.panel_session_waiting);
+            return;
+        }
+        binding.sessionMeta.setText(getString(R.string.panel_session_meta,
+                connections, formatBytes(upload), formatBytes(download)));
+    }
+
+    /** 延迟三档配色：≤200 绿 / ≤500 琥珀 / 其余（含超时）红。 */
+    private static int latencyColor(int milliseconds) {
+        return milliseconds <= 0 ? 0xFFE53935
+                : (milliseconds <= 200 ? 0xFF43A047
+                : (milliseconds <= 500 ? 0xFFF5A524 : 0xFFE53935));
+    }
+
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        if (bytes < 1024 * 1024) {
+            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024f);
+        }
+        if (bytes < 1024L * 1024 * 1024) {
+            return String.format(Locale.ROOT, "%.1f MB", bytes / 1048576f);
+        }
+        return String.format(Locale.ROOT, "%.2f GB", bytes / 1073741824f);
+    }
+
+    /** 顶部一行：控制接口是否连上、后端版本号。 */
+    private void setBackendStatus(int textRes, String formatArg, int colorRes) {
+        if (binding == null || !isAdded()) {
+            return;
+        }
+        binding.panelState.setText(formatArg == null
+                ? getString(textRes) : getString(textRes, formatArg));
+        binding.panelDot.setBackgroundTintList(ColorStateList.valueOf(
+                ContextCompat.getColor(requireContext(), colorRes)));
+    }
+
+    private void render(List<ClashApi.Group> loaded) {
         groups.clear();
         groups.addAll(sortGroups(loaded));
         adapter.submit(groups);
@@ -249,6 +287,9 @@ public final class PanelFragment extends Fragment {
         }
         if (openSheet != null) {
             openSheet.notifyDataSetChanged();
+        }
+        if (autoTestPending) {
+            autoTestIfDue();
         }
     }
 
@@ -261,20 +302,6 @@ public final class PanelFragment extends Fragment {
 
     private static boolean isGlobal(ClashApi.Group group) {
         return "GLOBAL".equalsIgnoreCase(group.name);
-    }
-
-    private void startTraffic() {
-        if (!trafficRunning.compareAndSet(false, true)) {
-            return;
-        }
-        ClashApi client = api();
-        new Thread(() -> client.streamTraffic((up, down) -> runOnUi(() -> {
-            if (binding == null) {
-                return;
-            }
-            binding.panelTraffic.setText(getString(R.string.panel_traffic,
-                    formatRate(up), formatRate(down)));
-        })), "panel-traffic").start();
     }
 
     // ==================================================================================
@@ -365,16 +392,6 @@ public final class PanelFragment extends Fragment {
         return group + "\u0000" + node;
     }
 
-    private static String formatRate(long bytesPerSecond) {
-        if (bytesPerSecond < 1024) {
-            return bytesPerSecond + " B/s";
-        }
-        if (bytesPerSecond < 1024 * 1024) {
-            return String.format(Locale.ROOT, "%.0f KB/s", bytesPerSecond / 1024f);
-        }
-        return String.format(Locale.ROOT, "%.1f MB/s", bytesPerSecond / 1048576f);
-    }
-
     private void runOnUi(Runnable runnable) {
         if (isAdded()) {
             requireActivity().runOnUiThread(runnable);
@@ -411,9 +428,9 @@ public final class PanelFragment extends Fragment {
                 : getString(R.string.panel_group_count, total);
     }
 
-    /** 节点行统一绑定：名字、类型与延迟、选中态高亮。 */
+    /** 节点行统一绑定：名字、类型与延迟（主列表再加上计数）、选中态高亮。 */
     private void bindNode(ItemPanelNodeBinding row, ClashApi.Group group, String node,
-                          View.OnClickListener onClick) {
+                          String suffix, View.OnClickListener onClick) {
         boolean selected = node.equals(group.now);
         String key = key(group.name, node);
 
@@ -430,24 +447,51 @@ public final class PanelFragment extends Fragment {
 
         String type = types.get(node);
         String typeText = type == null || type.isEmpty() ? "" : type.toUpperCase(Locale.ROOT);
+
+        String detail = "";
+        int delayColor = 0;
         if (Boolean.TRUE.equals(testing.get(key))) {
-            row.nodeDelay.setText(typeText.isEmpty() ? getString(R.string.panel_testing)
-                    : typeText + " · " + getString(R.string.panel_testing));
-            row.nodeDelay.setTextColor(textColor);
+            detail = getString(R.string.panel_testing);
         } else if (delays.containsKey(key)) {
             int delay = delays.get(key);
-            String delayText = delay == 0 ? getString(R.string.panel_timeout) : delay + " ms";
-            row.nodeDelay.setText(typeText.isEmpty() ? delayText : typeText + " · " + delayText);
-            row.nodeDelay.setTextColor(selected ? textColor
-                    : (delay == 0 ? 0xFFE53935 : (delay <= 200 ? 0xFF43A047
-                    : (delay <= 500 ? 0xFFF5A524 : 0xFFE53935))));
-        } else {
-            row.nodeDelay.setText(typeText);
-            row.nodeDelay.setTextColor(MaterialColors.getColor(row.nodeDelay,
-                    selected ? com.google.android.material.R.attr.colorOnPrimary
-                            : com.google.android.material.R.attr.colorOnSurfaceVariant));
+            detail = delay == 0 ? getString(R.string.panel_timeout) : delay + " ms";
+            // 只有延迟这个数字上色，类型与计数跟着卡片文字色走。
+            delayColor = latencyColor(delay);
         }
+
+        int baseColor = selected ? textColor : MaterialColors.getColor(row.nodeDelay,
+                com.google.android.material.R.attr.colorOnSurfaceVariant);
+        row.nodeDelay.setTextColor(baseColor);
+        row.nodeDelay.setText(joinParts(typeText, detail, suffix, delayColor));
         row.nodeCard.setOnClickListener(onClick);
+    }
+
+    /**
+     * 用「 · 」拼非空片段，并只给延迟片段染色。
+     *
+     * <p>弹窗里是「TROJAN · 217 ms」，主列表是「TROJAN · 217 ms · 2/4」；类型和计数保持
+     * 卡片的文字色（选中时就是白的），只有延迟按快慢上色。</p>
+     */
+    private static CharSequence joinParts(String type, String detail, String suffix,
+                                          int detailColor) {
+        String[] parts = {type, detail, suffix};
+        SpannableStringBuilder builder = new SpannableStringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part == null || part.isEmpty()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(" · ");
+            }
+            int start = builder.length();
+            builder.append(part);
+            if (i == 1 && detailColor != 0) {
+                builder.setSpan(new ForegroundColorSpan(detailColor), start, builder.length(),
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
+        return builder;
     }
 
     // ==================================================================================
@@ -476,7 +520,6 @@ public final class PanelFragment extends Fragment {
             ClashApi.Group group = items.get(position);
             ItemPanelGroupBinding card = holder.binding;
             card.groupName.setText(group.name);
-            card.groupCount.setText(countLabel(group));
             card.groupChevron.setText("▸");
             card.groupTest.setOnClickListener(v -> testGroup(group));
             card.groupHeader.setOnClickListener(v -> showGroupSheet(group));
@@ -489,7 +532,7 @@ public final class PanelFragment extends Fragment {
             ItemPanelNodeBinding row = ItemPanelNodeBinding.inflate(
                     LayoutInflater.from(card.nodeContainer.getContext()),
                     card.nodeContainer, false);
-            bindNode(row, group, group.now, v -> showGroupSheet(group));
+            bindNode(row, group, group.now, countLabel(group), v -> showGroupSheet(group));
             card.nodeContainer.addView(row.getRoot());
         }
 
@@ -532,7 +575,7 @@ public final class PanelFragment extends Fragment {
         @Override
         public void onBindViewHolder(@NonNull NodeHolder holder, int position) {
             String node = group.all.get(position);
-            bindNode(holder.binding, group, node, v -> {
+            bindNode(holder.binding, group, node, null, v -> {
                 select(group, node);
                 dialog.dismiss();
             });

@@ -35,8 +35,9 @@ final class NotifyAppIconHook {
     private static final ThreadLocal<Boolean> RESOLVING = new ThreadLocal<>();
 
     /** 「应用级图标资源 id -> 包名」缓存，给 Resources#getDrawable 那条路径用。 */
-    private static final Map<Integer, String> ICON_RESOURCES = new HashMap<>();
-    private static long iconResourcesExpires;
+    private static volatile Map<Integer, String> iconResources = java.util.Collections.emptyMap();
+    private static volatile long iconResourcesExpires;
+    private static final Object RESOURCES_LOCK = new Object();
     private static final long ICON_RESOURCES_TTL_MS = 2000L;
     /** 每条命中路径只打一行日志，用户抓日志就能看出 AOD 走的是哪条。 */
     private static final Set<String> LOGGED = java.util.Collections.synchronizedSet(
@@ -315,36 +316,44 @@ final class NotifyAppIconHook {
             return null;
         }
         long now = SystemClock.uptimeMillis();
-        synchronized (ICON_RESOURCES) {
-            if (now < iconResourcesExpires) {
-                return ICON_RESOURCES.get(resId);
-            }
+        Map<Integer, String> snapshot = iconResources;
+        if (now < iconResourcesExpires) {
+            // 无锁快路径：整张表是写时替换的不可变快照。
+            return snapshot.get(resId);
         }
-        Map<Integer, String> rebuilt = new HashMap<>();
-        PackageManager pm = LauncherIconProvider.packageManager();
-        Set<String> targets = HookPrefs.getStringSet(Keys.NOTIFY_ICON_TARGETS);
-        if (pm != null) {
-            for (String target : targets) {
-                try {
-                    ApplicationInfo info = pm.getApplicationInfo(target, 0);
-                    if (info.icon == 0) {
-                        continue;
+        return rebuildIconResources(resources, resId, now);
+    }
+
+    private static String rebuildIconResources(Resources resources, int resId, long now) {
+        synchronized (RESOURCES_LOCK) {
+            if (now < iconResourcesExpires) {
+                return iconResources.get(resId);
+            }
+            Set<String> targets = HookPrefs.getStringSet(Keys.NOTIFY_ICON_TARGETS);
+            Map<Integer, String> rebuilt = new HashMap<>();
+            if (!targets.isEmpty()) {
+                PackageManager pm = LauncherIconProvider.packageManager();
+                if (pm != null) {
+                    for (String target : targets) {
+                        try {
+                            ApplicationInfo info = pm.getApplicationInfo(target, 0);
+                            if (info.icon == 0) {
+                                continue;
+                            }
+                            // 所有应用共用 0x7f 资源包段，id 会撞车，必须再用资源所属包名核对
+                            if (target.equals(resources.getResourcePackageName(info.icon))) {
+                                rebuilt.put(info.icon, target);
+                            }
+                        } catch (Throwable ignored) {
+                            // 包被卸载 / 资源不在这个 Resources 里。
+                        }
                     }
-                    // 所有应用共用 0x7f 资源包段，id 会撞车，必须再用资源所属包名核对
-                    if (target.equals(resources.getResourcePackageName(info.icon))) {
-                        rebuilt.put(info.icon, target);
-                    }
-                } catch (Throwable ignored) {
-                    // 包被卸载 / 资源不在这个 Resources 里。
                 }
             }
-        }
-        synchronized (ICON_RESOURCES) {
-            ICON_RESOURCES.clear();
-            ICON_RESOURCES.putAll(rebuilt);
+            iconResources = rebuilt;
             iconResourcesExpires = now + ICON_RESOURCES_TTL_MS;
+            return rebuilt.get(resId);
         }
-        return rebuilt.get(resId);
     }
 
     // ==================================================================================

@@ -36,6 +36,8 @@ final class AodIconHook {
     private final ClassLoader classLoader;
     private final Set<Integer> tracedResources = Collections.synchronizedSet(new HashSet<>());
     private final AtomicInteger bindLogs = new AtomicInteger();
+    /** 已经打过日志的包名，避免每次息屏刷新都重复一条。 */
+    private final Set<String> loggedPackages = Collections.synchronizedSet(new HashSet<>());
 
     AodIconHook(XposedInterface xposed, ClassLoader classLoader) {
         this.xposed = xposed;
@@ -141,7 +143,10 @@ final class AodIconHook {
             // 有些 AOD 版本用 background 画图标。
             image.setBackground(icon);
         }
-        Logs.i(LOG_TAG + "AOD 图标已替换 pkg=" + packageName + " 原有图=" + hadImage);
+        // 息屏每次刷新都会重新 bind，同一个包只留一行，别把日志刷满。
+        if (loggedPackages.add(packageName)) {
+            Logs.i(LOG_TAG + "AOD 图标已替换 pkg=" + packageName + " 原有图=" + hadImage);
+        }
     }
 
     /**

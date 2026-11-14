@@ -85,6 +85,14 @@ final class DualSignalHook {
     private final Map<Integer, Boolean> dataSimBySubId = new ConcurrentHashMap<>();
     private final Map<Integer, String> typeBySubId = new ConcurrentHashMap<>();
     private final IconFinder icons = new IconFinder();
+    /**
+     * 每个锚点（SIM 视图）里已经解析过的子视图。
+     *
+     * <p>一次刷新要拿 6～10 个子视图，每个都是一次整棵子树扫描；信号跳动时刷新很频繁，
+     * 所以按锚点缓存，命中时再确认一次「还挂在这棵树上」，视图被系统重建后自动重新解析。</p>
+     */
+    private final Map<ViewGroup, Map<String, View>> childCache =
+            Collections.synchronizedMap(new WeakHashMap<>());
     /** 每颗 SIM 视图的「主题图标快照」，避免每次信号刷新都重新克隆一遍 Drawable。 */
     private final Map<ViewGroup, IconSnapshot> iconCache =
             Collections.synchronizedMap(new WeakHashMap<>());
@@ -632,14 +640,54 @@ final class DualSignalHook {
         }
     }
 
+    /**
+     * 取根视图里的子视图：优先用缓存，失效（被系统重建 / 换了父容器）时才重新扫描。
+     */
+    private View child(View root, String name) {
+        if (!(root instanceof ViewGroup)) {
+            return icons.byName(root, name);
+        }
+        ViewGroup anchor = (ViewGroup) root;
+        Map<String, View> cached = childCache.get(anchor);
+        if (cached != null) {
+            View hit = cached.get(name);
+            if (hit != null && isUnder(hit, anchor)) {
+                return hit;
+            }
+        }
+        View found = icons.byName(anchor, name);
+        if (found != null) {
+            Map<String, View> map = cached;
+            if (map == null) {
+                map = new HashMap<>();
+                childCache.put(anchor, map);
+            }
+            map.put(name, found);
+        }
+        return found;
+    }
+
+    /** 视图是否还挂在给定容器下面（深度有限，状态栏层级很浅）。 */
+    private static boolean isUnder(View view, ViewGroup anchor) {
+        View current = view;
+        for (int depth = 0; depth < 12 && current != null; depth++) {
+            if (current == anchor) {
+                return true;
+            }
+            android.view.ViewParent parent = current.getParent();
+            current = parent instanceof View ? (View) parent : null;
+        }
+        return false;
+    }
+
     private void applyDualIcon(ViewGroup anchor, int dataSub, int otherSub,
                                String type, int dataLevel, int otherLevel,
                                int scale, int thickness, int textScale, int textThickness) {
         Context context = anchor.getContext();
-        View signalContainerView = icons.byName(anchor, "mobile_signal_container");
+        View signalContainerView = child(anchor, "mobile_signal_container");
         ViewGroup signalContainer = signalContainerView instanceof ViewGroup
                 ? (ViewGroup) signalContainerView : null;
-        View mobileGroupView = icons.byName(anchor, "mobile_group");
+        View mobileGroupView = child(anchor, "mobile_group");
         ViewGroup mobileGroup = mobileGroupView instanceof ViewGroup
                 ? (ViewGroup) mobileGroupView : null;
 
@@ -685,14 +733,14 @@ final class DualSignalHook {
             injectedViews.put(anchor, custom);
         }
 
-        View typeSingle = icons.byName(anchor, "mobile_type_single");
-        View typeSmall = icons.byName(anchor, "mobile_type");
+        View typeSingle = child(anchor, "mobile_type_single");
+        View typeSmall = child(anchor, "mobile_type");
         if (mobileGroup != null && signalContainer != null) {
             // The custom container replaces the whole official signal area, including its
             // private type icon and activity indicator.
             suppressor.hide(signalContainer);
         } else {
-            suppressor.hide(icons.byName(anchor, "mobile_signal"));
+            suppressor.hide(child(anchor, "mobile_signal"));
         }
         suppressor.hide(typeSmall);
         // The big 5G/4G TextView gets re-shown by SystemUI while the status bar re-lays out
@@ -910,7 +958,7 @@ final class DualSignalHook {
     }
 
     private String typeFromOfficialView(View anchor) {
-        View typeSingle = icons.byName(anchor, "mobile_type_single");
+        View typeSingle = child(anchor, "mobile_type_single");
         if (typeSingle instanceof TextView) {
             CharSequence text = ((TextView) typeSingle).getText();
             if (text != null) {
@@ -920,7 +968,7 @@ final class DualSignalHook {
                 }
             }
         }
-        View typeSmall = icons.byName(anchor, "mobile_type");
+        View typeSmall = child(anchor, "mobile_type");
         if (typeSmall instanceof ImageView) {
             Object drawable = ((ImageView) typeSmall).getDrawable();
             Object value = Reflect.getField(drawable, "mMobileType");
@@ -948,9 +996,9 @@ final class DualSignalHook {
             return;
         }
         ViewGroup group = (ViewGroup) anchor;
-        colorTypeText = icons.byName(group, "mobile_type_single");
-        colorTypeIcon = icons.byName(group, "mobile_type");
-        colorSignalIcon = icons.byName(group, "mobile_signal");
+        colorTypeText = child(group, "mobile_type_single");
+        colorTypeIcon = child(group, "mobile_type");
+        colorSignalIcon = child(group, "mobile_signal");
     }
 
     /** 零反射的快路径是运营商标识 TextView；没有它才退回读 colorFilter。 */
@@ -1037,19 +1085,19 @@ final class DualSignalHook {
     }
 
     private int anchorColor(View anchor) {
-        View typeSingle = icons.byName(anchor, "mobile_type_single");
+        View typeSingle = child(anchor, "mobile_type_single");
         if (typeSingle instanceof TextView) {
             int color = ((TextView) typeSingle).getCurrentTextColor();
             if (Color.alpha(color) != 0) {
                 return color;
             }
         }
-        View type = icons.byName(anchor, "mobile_type");
+        View type = child(anchor, "mobile_type");
         int color = filterColor(type);
         if (color != 0) {
             return color;
         }
-        return filterColor(icons.byName(anchor, "mobile_signal"));
+        return filterColor(child(anchor, "mobile_signal"));
     }
 
     private int filterColor(View view) {
@@ -1093,9 +1141,9 @@ final class DualSignalHook {
     private int referenceIconHeight(ViewGroup anchor, ViewGroup parent) {
         String[] candidates = {"battery", "battery_icon", "battery_text_view", "wifi", "wifi_signal"};
         for (String name : candidates) {
-            View candidate = parent != null ? icons.byName(parent, name) : null;
+            View candidate = parent != null ? child(parent, name) : null;
             if (candidate == null) {
-                candidate = icons.byName(anchor, name);
+                candidate = child(anchor, name);
             }
             if (candidate != null && candidate.getHeight() > 0) {
                 return candidate.getHeight();
@@ -1176,7 +1224,7 @@ final class DualSignalHook {
         if (simView == null) {
             return null;
         }
-        View byId = icons.byName(simView, "mobile_signal");
+        View byId = child(simView, "mobile_signal");
         if (byId instanceof ImageView) {
             return (ImageView) byId;
         }

@@ -6,15 +6,18 @@ import android.widget.TextView;
 
 import com.hyperosmod.Keys;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,8 +70,14 @@ final class ClockSecondsHook {
 
     /** 时钟视图 → 系统给的那条「分钟级」基准文本。 */
     private final Map<TextView, String> bases = Collections.synchronizedMap(new WeakHashMap<>());
-    private final Set<TextView> clocks = Collections.synchronizedSet(
-            Collections.newSetFromMap(new WeakHashMap<>()));
+    /**
+     * 认领到的时钟视图。
+     *
+     * <p>原来用 {@code synchronizedSet(WeakHashMap)}，而 {@code contains} 会在 SystemUI 的
+     * <b>每一次</b> {@code TextView#setText} 上抢同一把锁——通知列表滚动时这是纯损失。
+     * 改成弱引用列表：读路径无锁，元素通常只有 1～2 个。</p>
+     */
+    private final List<WeakReference<TextView>> clockRefs = new CopyOnWriteArrayList<>();
     /** view id → 是否是时钟，热路径只做一次 Integer 比较。 */
     private final Map<Integer, Boolean> clockIdVerdicts = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile boolean loggedFirstClock;
@@ -138,7 +147,12 @@ final class ClockSecondsHook {
     }
 
     private void maybeRegister(TextView view) {
-        if (clocks.contains(view)) {
+        // 快路径：先查 id 判定（无锁、无分配），非时钟视图一次整数比较就退出。
+        Boolean verdict = clockIdVerdicts.get(view.getId());
+        if (Boolean.FALSE.equals(verdict)) {
+            return;
+        }
+        if (isClock(view)) {
             captureBase(view);
             if (isEnabled()) {
                 applySeconds(view);
@@ -149,6 +163,25 @@ final class ClockSecondsHook {
         if (looksLikeClock(view)) {
             register(view);
         }
+    }
+
+    /** 视图是否已经被认领为时钟（弱引用列表，无锁）。 */
+    private boolean isClock(TextView view) {
+        for (WeakReference<TextView> ref : clockRefs) {
+            if (ref.get() == view) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasClocks() {
+        for (WeakReference<TextView> ref : clockRefs) {
+            if (ref.get() != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** id 名或类名判定，结果按 id 缓存。 */
@@ -181,7 +214,7 @@ final class ClockSecondsHook {
     /** 开关开着却迟迟没认领到时钟时，留一条可以直接抄回来的诊断行。 */
     private void warnIfClockMissing() {
         mainHandler.postDelayed(() -> {
-            if (isEnabled() && clocks.isEmpty()) {
+            if (isEnabled() && !hasClocks()) {
                 Logs.w(TAG + ": 开关已开，但 5 秒内没抓到状态栏时钟；"
                         + "可能是 Compose 时钟，或时钟不在 SystemUI 进程", null);
             }
@@ -246,7 +279,12 @@ final class ClockSecondsHook {
         if (clock == null) {
             return;
         }
-        boolean first = clocks.add(clock);
+        boolean first = !isClock(clock);
+        if (first) {
+            // 顺手清掉已被回收的弱引用，列表长度保持在 1～2 个。
+            clockRefs.removeIf(ref -> ref.get() == null);
+            clockRefs.add(new WeakReference<>(clock));
+        }
         if (first && !loggedFirstClock) {
             loggedFirstClock = true;
             String entry = IconFinder.entryName(clock);
@@ -391,9 +429,14 @@ final class ClockSecondsHook {
     }
 
     private ArrayList<TextView> snapshot() {
-        synchronized (clocks) {
-            return new ArrayList<>(clocks);
+        ArrayList<TextView> result = new ArrayList<>(clockRefs.size());
+        for (WeakReference<TextView> ref : clockRefs) {
+            TextView clock = ref.get();
+            if (clock != null) {
+                result.add(clock);
+            }
         }
+        return result;
     }
 
     private void registerPrefsListener() {

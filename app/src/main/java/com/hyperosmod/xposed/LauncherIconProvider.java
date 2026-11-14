@@ -11,8 +11,11 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.os.SystemClock;
 
+import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 读取某个应用「当前正在使用的桌面图标」。
@@ -28,15 +31,31 @@ import java.util.Map;
 final class LauncherIconProvider {
     /** 图标缓存时长：换图标是低频操作，短缓存只是为了避免同一条通知里反复 IPC。 */
     private static final long TTL_MS = 2000L;
+    /** 取不到图标（包被冻结/卸载中）时的负缓存，别每次都去问 PackageManager。 */
+    private static final long MISSING_TTL_MS = 5000L;
     /** 通知小图标的位图边长，够 3x 屏幕放大显示。 */
     private static final int BITMAP_SIZE = 144;
     /** 自适应图标前景层只占 108dp 里的 72dp 安全区，放大到铺满才接近桌面上的观感。 */
     private static final float FOREGROUND_FILL = 1.25f;
 
-    private static final Map<String, Entry> CACHE = new HashMap<>();
+    /**
+     * 不可变快照：写入时整份替换，读取完全无锁。
+     *
+     * <p>这条路径在通知刷新与资源 hook 里会被高频调用，原来每次读都要抢同一把锁。</p>
+     */
+    private static volatile Map<String, Entry> cache = Collections.emptyMap();
+    private static final Object CACHE_LOCK = new Object();
     private static final String LOG_TAG = "notify-icon: ";
     /** 只在桌面图标真的变了时打一行日志，避免每次重算都刷屏。 */
-    private static final Map<String, String> LAST_LOGGED = new HashMap<>();
+    private static final Map<String, String> LAST_LOGGED = new ConcurrentHashMap<>();
+
+    /** 反射出来的 ActivityThread 入口，只解析一次。 */
+    private static volatile Method currentActivityThread;
+    private static volatile Method getApplication;
+    private static volatile Method getSystemContext;
+    private static volatile boolean methodsResolved;
+    /** 同一个进程里 PackageManager 是稳定的，拿到就留着。 */
+    private static volatile PackageManager packageManagerCache;
 
     private static final class Entry {
         final Drawable drawable;
@@ -67,19 +86,41 @@ final class LauncherIconProvider {
 
     /** 从当前进程里摸一个 PackageManager 出来；SystemUI 用的是系统用户的 Context。 */
     static PackageManager packageManager() {
+        PackageManager cached = packageManagerCache;
+        if (cached != null) {
+            return cached;
+        }
+        return resolvePackageManager();
+    }
+
+    private static synchronized PackageManager resolvePackageManager() {
+        PackageManager cached = packageManagerCache;
+        if (cached != null) {
+            return cached;
+        }
         try {
-            Class<?> threadClass = Class.forName("android.app.ActivityThread");
-            Object thread = threadClass.getMethod("currentActivityThread").invoke(null);
+            if (!methodsResolved) {
+                Class<?> threadClass = Class.forName("android.app.ActivityThread");
+                currentActivityThread = threadClass.getMethod("currentActivityThread");
+                getApplication = threadClass.getMethod("getApplication");
+                getSystemContext = threadClass.getMethod("getSystemContext");
+                methodsResolved = true;
+            }
+            Object thread = currentActivityThread.invoke(null);
             if (thread == null) {
                 return null;
             }
-            Object application = threadClass.getMethod("getApplication").invoke(thread);
+            Object application = getApplication.invoke(thread);
             if (application instanceof Context) {
-                return ((Context) application).getPackageManager();
+                PackageManager pm = ((Context) application).getPackageManager();
+                packageManagerCache = pm;
+                return pm;
             }
-            Object system = threadClass.getMethod("getSystemContext").invoke(thread);
+            Object system = getSystemContext.invoke(thread);
             if (system instanceof Context) {
-                return ((Context) system).getPackageManager();
+                PackageManager pm = ((Context) system).getPackageManager();
+                packageManagerCache = pm;
+                return pm;
             }
         } catch (Throwable ignored) {
             // 调用方自己处理 null。
@@ -92,22 +133,21 @@ final class LauncherIconProvider {
             return null;
         }
         long now = SystemClock.uptimeMillis();
-        synchronized (CACHE) {
-            Entry cached = CACHE.get(packageName);
-            if (cached != null && cached.expires > now) {
-                return cached;
-            }
+        Entry cached = cache.get(packageName);
+        if (cached != null && cached.expires > now) {
+            return cached;
         }
-        Entry built = build(pm, packageName);
-        if (built != null) {
-            synchronized (CACHE) {
-                CACHE.put(packageName, built);
-            }
+        Entry built = build(pm, packageName, now);
+        Entry stored = built != null ? built : new Entry(null, null, now + MISSING_TTL_MS);
+        synchronized (CACHE_LOCK) {
+            Map<String, Entry> next = new HashMap<>(cache);
+            next.put(packageName, stored);
+            cache = next;
         }
         return built;
     }
 
-    private static Entry build(PackageManager pm, String packageName) {
+    private static Entry build(PackageManager pm, String packageName, long now) {
         ComponentName component = null;
         Drawable drawable = null;
         try {
@@ -138,14 +178,12 @@ final class LauncherIconProvider {
         Bitmap bitmap = render(drawable, BITMAP_SIZE);
         Icon icon = bitmap == null ? null : Icon.createWithBitmap(bitmap);
         String componentName = component == null ? "?" : component.flattenToShortString();
-        synchronized (LAST_LOGGED) {
-            if (!componentName.equals(LAST_LOGGED.get(packageName))) {
-                LAST_LOGGED.put(packageName, componentName);
-                Logs.i(LOG_TAG + "桌面图标 " + packageName + " 组件=" + componentName
-                        + " 小图标=" + (icon != null));
-            }
+        if (!componentName.equals(LAST_LOGGED.get(packageName))) {
+            LAST_LOGGED.put(packageName, componentName);
+            Logs.i(LOG_TAG + "桌面图标 " + packageName + " 组件=" + componentName
+                    + " 小图标=" + (icon != null));
         }
-        return new Entry(drawable, icon, SystemClock.uptimeMillis() + TTL_MS);
+        return new Entry(drawable, icon, now + TTL_MS);
     }
 
     /**

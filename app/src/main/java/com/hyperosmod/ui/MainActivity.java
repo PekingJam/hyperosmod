@@ -3,6 +3,7 @@ package com.hyperosmod.ui;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.Toast;
@@ -22,7 +23,6 @@ import com.hyperosmod.databinding.ActivityMainBinding;
 import com.hyperosmod.databinding.RowSwitchBinding;
 import com.hyperosmod.singbox.SingBoxFragment;
 import com.hyperosmod.singbox.TileEntryActivity;
-import com.hyperosmod.singbox.NotificationPermission;
 import com.hyperosmod.singbox.PanelFragment;
 
 import java.util.Locale;
@@ -42,10 +42,14 @@ public final class MainActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private boolean appListPromptShown;
     private boolean dndPromptShown;
-    /** 本次进程内只提示一次通知权限，别每次回到前台都弹。 */
-    private boolean notificationPrompted;
-    /** 作用域缺口只提示一次。 */
-    private boolean notifyIconScopePrompted;
+
+    /** Root 授权状态：起 su 有成本，查一次缓存一分钟。 */
+    private static final long ROOT_CACHE_MS = 60_000L;
+    private final java.util.concurrent.atomic.AtomicBoolean rootChecking =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile boolean rootKnown;
+    private volatile boolean rootGranted;
+    private volatile long rootCheckedAt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,7 +70,10 @@ public final class MainActivity extends AppCompatActivity {
         routeFromIntent(getIntent());
 
         binding.footer.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
-        binding.buttonRestart.setOnClickListener(v -> restartSystemUi());
+        binding.footerStatusbar.setText(getString(R.string.footer, BuildConfig.VERSION_NAME));
+        binding.btnRestartSystemui.setOnClickListener(v -> restartSystemUi());
+        binding.btnRestartSystem.setOnClickListener(v -> confirmReboot());
+        binding.btnOpenLsposed.setOnClickListener(v -> LsposedLauncher.open(this));
     }
 
     @Override
@@ -74,10 +81,6 @@ public final class MainActivity extends AppCompatActivity {
         super.onStart();
         Prefs.addServiceListener(serviceListener);
         refreshAll();
-        // 通知栏常驻是用户显式打开的，应用每次启动时对齐一次状态。
-        if (Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false)) {
-            com.hyperosmod.singbox.PanelStatusService.start(this);
-        }
     }
 
     @Override
@@ -96,7 +99,7 @@ public final class MainActivity extends AppCompatActivity {
         } else if (tab == TileEntryActivity.TAB_PANEL) {
             target = R.id.tab_singbox;
         } else {
-            target = R.id.tab_statusbar;
+            target = R.id.tab_system;
         }
         binding.bottomNav.setSelectedItemId(target);
     }
@@ -114,59 +117,41 @@ public final class MainActivity extends AppCompatActivity {
         UiUtils.applySystemBars(this);
         refreshAll();
         checkPermissions();
-        checkNotificationPermission();
-        checkNotifyIconScope();
     }
 
-    /**
-     * 通知图标同步开着、但有该进作用域的进程没勾时，直接把缺口摆到脸上。
-     *
-     * <p>这个功能的「没生效」里绝大多数是作用域没勾全：模块不会被注入那个进程，日志里
-     * 连一行都看不到，用户只会觉得功能坏了。</p>
-     */
-    private void checkNotifyIconScope() {
-        if (notifyIconScopePrompted
-                || !Prefs.getBoolean(Keys.NOTIFY_ICON_ENABLED, false)
-                || !App.isActivated()) {
-            return;
-        }
-        List<String> missing = new ArrayList<>();
-        if (!App.isInScope("com.android.systemui")) {
-            missing.add(getString(R.string.notify_icon_scope_systemui));
-        }
-        if (isInstalled("com.miui.aod") && !App.isInScope("com.miui.aod")) {
-            missing.add(getString(R.string.notify_icon_scope_aod));
-        }
-        for (String packageName : Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS)) {
-            if (!App.isInScope(packageName)) {
-                missing.add(appLabel(packageName));
-            }
-        }
-        if (missing.isEmpty()) {
-            return;
-        }
-        notifyIconScopePrompted = true;
+    /** 重启系统不可撤销，先确认一次。 */
+    private void confirmReboot() {
         new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.notify_icon_scope_dialog_title)
-                .setMessage(getString(R.string.notify_icon_scope_dialog_message,
-                        TextUtils.join("、", missing)))
+                .setTitle(R.string.reboot_confirm_title)
+                .setMessage(R.string.reboot_confirm_message)
                 .setNegativeButton(R.string.later, null)
-                .setPositiveButton(R.string.notify_icon_scope_dialog_open,
-                        (dialog, which) -> openLsposedManager())
+                .setPositiveButton(R.string.reboot_confirm_ok, (dialog, which) -> rebootSystem())
                 .show();
     }
 
-    private void openLsposedManager() {
+    private void rebootSystem() {
+        binding.btnRestartSystem.setEnabled(false);
+        executor.execute(() -> {
+            final boolean ok = runRoot("reboot");
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                binding.btnRestartSystem.setEnabled(true);
+                Toast.makeText(this, ok ? R.string.reboot_sent : R.string.reboot_failed,
+                        Toast.LENGTH_LONG).show();
+            });
+        });
+    }
+
+    /** 以 root 执行一条命令，返回退出码是否为 0。 */
+    private static boolean runRoot(String command) {
         try {
-            Intent intent = getPackageManager().getLaunchIntentForPackage("org.lsposed.manager");
-            if (intent != null) {
-                startActivity(intent);
-                return;
-            }
-        } catch (Throwable ignored) {
-            // 落到下面的提示。
+            Process process = Runtime.getRuntime().exec(new String[]{"su", "-c", command});
+            return process.waitFor() == 0;
+        } catch (Throwable t) {
+            return false;
         }
-        Toast.makeText(this, R.string.notify_icon_scope_dialog_manual, Toast.LENGTH_LONG).show();
     }
 
     private boolean isInstalled(String packageName) {
@@ -185,35 +170,6 @@ public final class MainActivity extends AppCompatActivity {
                     .toString();
         } catch (Throwable t) {
             return packageName;
-        }
-    }
-
-    /**
-     * 通知栏常驻开关开着、但权限没给时补一次授权请求。
-     *
-     * <p>没有通知权限时前台服务照样在跑，只是通知栏看不到东西——用户会以为功能坏了，
-     * 所以在应用启动/回前台时顺手补一次，且每次进程只弹一次，不骚扰。</p>
-     */
-    private void checkNotificationPermission() {
-        if (!Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false)) {
-            return;
-        }
-        if (NotificationPermission.granted(this)) {
-            com.hyperosmod.singbox.PanelStatusService.start(this);
-            return;
-        }
-        if (!notificationPrompted) {
-            notificationPrompted = true;
-            NotificationPermission.request(this);
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                                           int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == NotificationPermission.REQUEST_CODE) {
-            checkNotificationPermission();
         }
     }
 
@@ -239,8 +195,19 @@ public final class MainActivity extends AppCompatActivity {
             ensureFragment(R.id.container_singbox, SingBoxFragment::new, "singbox");
         } else if (itemId == R.id.tab_panel) {
             ensureFragment(R.id.container_panel, PanelFragment::new, "panel");
+            notifyPanelVisible();
         }
         binding.scrollContent.scrollTo(0, 0);
+    }
+
+    /** 面板页每次被切过来时通知一次：它自己决定要不要自动跑全量测速。 */
+    private void notifyPanelVisible() {
+        FragmentManager manager = getSupportFragmentManager();
+        manager.executePendingTransactions();
+        Fragment panel = manager.findFragmentByTag("panel");
+        if (panel instanceof PanelFragment) {
+            ((PanelFragment) panel).onTabVisible();
+        }
     }
 
     private void ensureFragment(int containerId, java.util.function.Supplier<Fragment> factory,
@@ -433,55 +400,68 @@ public final class MainActivity extends AppCompatActivity {
 
     private void refreshStatus() {
         boolean active = App.isActivated();
-
-        int title;
-        int summary;
-        int dotColor;
-        if (active) {
-            title = R.string.status_active;
-            summary = R.string.status_hint_active;
-            dotColor = R.color.accent_green;
-        } else {
-            title = R.string.status_inactive;
-            summary = R.string.status_hint_inactive;
-            dotColor = R.color.accent_red;
-        }
-
-        binding.statusTitle.setText(title);
-        binding.statusSummary.setText(summary);
+        binding.statusState.setTextColor(ContextCompat.getColor(this,
+                active ? R.color.accent_green : R.color.accent_red));
+        binding.statusState.setText(active
+                ? R.string.state_connected : R.string.state_disconnected);
         binding.statusDot.setBackgroundTintList(ColorStateList.valueOf(
-                ContextCompat.getColor(this, dotColor)));
+                ContextCompat.getColor(this, active ? R.color.accent_green : R.color.accent_red)));
+
+        // Root 授权要起 su 进程，不能每次都同步查：缓存一分钟，结果回来再刷一次。
+        if (!rootKnown || SystemClock.uptimeMillis() - rootCheckedAt > ROOT_CACHE_MS) {
+            checkRootAsync();
+        }
+        applyRootState(rootKnown ? Boolean.valueOf(rootGranted) : null);
+    }
+
+    private void checkRootAsync() {
+        if (!rootChecking.compareAndSet(false, true)) {
+            return;
+        }
+        executor.execute(() -> {
+            final boolean granted = com.hyperosmod.singbox.RootShell.hasRoot();
+            runOnUiThread(() -> {
+                rootChecking.set(false);
+                rootGranted = granted;
+                rootKnown = true;
+                rootCheckedAt = SystemClock.uptimeMillis();
+                if (!isFinishing() && !isDestroyed()) {
+                    applyRootState(granted);
+                }
+            });
+        });
+    }
+
+    private void applyRootState(Boolean granted) {
+        int state;
+        int color;
+        if (granted == null) {
+            state = R.string.state_checking;
+            color = R.color.accent_amber;
+        } else if (granted) {
+            state = R.string.state_root_granted;
+            color = R.color.accent_green;
+        } else {
+            state = R.string.state_root_denied;
+            color = R.color.accent_red;
+        }
+        binding.rootState.setText(state);
+        binding.rootState.setTextColor(ContextCompat.getColor(this, color));
+        binding.rootDot.setBackgroundTintList(ColorStateList.valueOf(
+                ContextCompat.getColor(this, color)));
     }
 
     private void restartSystemUi() {
-        binding.buttonRestart.setEnabled(false);
-        binding.buttonRestart.setText(R.string.restart_running);
+        binding.btnRestartSystemui.setEnabled(false);
         executor.execute(() -> {
-            boolean ok = false;
-            String[][] commands = {
-                    {"su", "-c", "killall com.android.systemui"},
-                    {"su", "-c", "pkill -f com.android.systemui"}
-            };
-            for (String[] command : commands) {
-                try {
-                    Process process = Runtime.getRuntime().exec(command);
-                    if (process.waitFor() == 0) {
-                        ok = true;
-                        break;
-                    }
-                } catch (Throwable ignored) {
-                    // Try the next command.
-                }
-            }
-            final boolean success = ok;
+            boolean ok = runRoot("killall com.android.systemui") || runRoot("pkill -f com.android.systemui");
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) {
                     return;
                 }
-                binding.buttonRestart.setEnabled(true);
-                binding.buttonRestart.setText(R.string.restart_systemui);
+                binding.btnRestartSystemui.setEnabled(true);
                 Toast.makeText(this,
-                        success ? R.string.restart_success : R.string.restart_failed,
+                        ok ? R.string.restart_success : R.string.restart_failed,
                         Toast.LENGTH_LONG).show();
             });
         });

@@ -46,31 +46,6 @@ public final class SingBoxConfigActivity extends AppCompatActivity {
         binding.apiUrl.setText(Prefs.getString(Keys.SINGBOX_API_URL, "http://127.0.0.1:9090"));
         binding.apiSecret.setText(Prefs.getString(Keys.SINGBOX_API_SECRET, ""));
 
-        binding.switchNotify.setChecked(Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false));
-        binding.switchNotify.setOnCheckedChangeListener((button, checked) -> {
-            Prefs.setBoolean(Keys.SINGBOX_NOTIFY, checked);
-            if (checked) {
-                requestNotificationPermission();
-                // 先停再起：复用旧通知会让系统沿用缓存的小图标。
-                PanelStatusService.stop(this);
-                PanelStatusService.start(this);
-            } else {
-                PanelStatusService.stop(this);
-            }
-        });
-
-        binding.btnNotifySettings.setOnClickListener(v ->
-                NotificationPermission.openSettings(this));
-        updateNotifyPermissionHint();
-
-        binding.btnNotifyResend.setOnClickListener(v -> {
-            Prefs.setBoolean(Keys.SINGBOX_NOTIFY, true);
-            binding.switchNotify.setChecked(true);
-            PanelStatusService.stop(this);
-            PanelStatusService.start(this);
-            toast("已重新发送通知");
-        });
-
         binding.davUrl.setText(Prefs.getString(Keys.SINGBOX_WEBDAV_URL, ""));
         binding.davUser.setText(Prefs.getString(Keys.SINGBOX_WEBDAV_USER, ""));
         binding.davPass.setText(SecretStore.decrypt(this,
@@ -90,33 +65,6 @@ public final class SingBoxConfigActivity extends AppCompatActivity {
         // 接口地址随手改随手生效，不用额外的保存按钮。
         Prefs.setString(Keys.SINGBOX_API_URL, text(binding.apiUrl));
         Prefs.setString(Keys.SINGBOX_API_SECRET, text(binding.apiSecret));
-    }
-
-    /** 通知权限：交给统一入口处理，缺权限时同步更新提示与「去授权」按钮。 */
-    private void requestNotificationPermission() {
-        NotificationPermission.request(this);
-        updateNotifyPermissionHint();
-    }
-
-    private void updateNotifyPermissionHint() {
-        boolean granted = NotificationPermission.granted(this);
-        boolean enabled = Prefs.getBoolean(Keys.SINGBOX_NOTIFY, false);
-        binding.btnNotifySettings.setVisibility(granted ? android.view.View.GONE
-                : android.view.View.VISIBLE);
-        binding.notifyHint.setVisibility(granted ? android.view.View.GONE
-                : android.view.View.VISIBLE);
-        if (granted && enabled) {
-            PanelStatusService.start(this);
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                                           int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == NotificationPermission.REQUEST_CODE) {
-            updateNotifyPermissionHint();
-        }
     }
 
     private String text(android.widget.EditText edit) {

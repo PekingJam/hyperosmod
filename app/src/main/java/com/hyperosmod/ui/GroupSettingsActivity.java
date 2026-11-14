@@ -222,7 +222,8 @@ public final class GroupSettingsActivity extends AppCompatActivity {
         toggle.switchView.setOnCheckedChangeListener((button, checked) -> {
             Prefs.setBoolean(Keys.NOTIFY_ICON_ENABLED, checked);
             if (checked) {
-                warnMissingScope();
+                // 只有用户主动打开这个功能时才检查作用域：平时不打扰，缺了就直接引导去授权。
+                checkScopeOnEnable();
             }
         });
         notifyIconTargetsRow = addEntry(card, R.string.notify_icon_targets_title,
@@ -404,6 +405,56 @@ public final class GroupSettingsActivity extends AppCompatActivity {
                 return;
             }
         }
+    }
+
+    /**
+     * 打开「跟随桌面图标」时检查一次作用域，缺口直接弹窗并给「打开 LSPosed」的入口。
+     *
+     * <p>这个功能的「没生效」里绝大多数是作用域没勾全：模块不会被注入那个进程，日志里
+     * 连一行都看不到，用户只会觉得功能坏了。所以只在用户主动开启时提示，平时不打扰。</p>
+     */
+    private void checkScopeOnEnable() {
+        if (!App.isActivated()) {
+            return;
+        }
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        if (!App.isInScope("com.android.systemui")) {
+            missing.add(getString(R.string.notify_icon_scope_systemui));
+        }
+        java.util.List<String> aod = aodPackages();
+        if (!aod.isEmpty()) {
+            boolean anyInScope = false;
+            for (String packageName : aod) {
+                if (App.isInScope(packageName)) {
+                    anyInScope = true;
+                    break;
+                }
+            }
+            if (!anyInScope) {
+                missing.add(getString(R.string.notify_icon_scope_aod));
+            }
+        }
+        for (String packageName : Prefs.getStringSet(Keys.NOTIFY_ICON_TARGETS)) {
+            if (!App.isInScope(packageName)) {
+                missing.add(appLabel(packageName));
+            }
+        }
+        updateNotifyIconRow();
+        if (missing.isEmpty()) {
+            return;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.notify_icon_scope_dialog_title)
+                .setMessage(getString(R.string.notify_icon_scope_dialog_message,
+                        android.text.TextUtils.join("、", missing)))
+                .setNegativeButton(R.string.later, null)
+                .setPositiveButton(R.string.notify_icon_scope_dialog_open,
+                        (dialog, which) -> openLsposedManager())
+                .show();
+    }
+
+    private void openLsposedManager() {
+        LsposedLauncher.open(this);
     }
 
     private void warnScope(String packageName) {

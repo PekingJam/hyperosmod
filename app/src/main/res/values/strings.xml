@@ -6,6 +6,16 @@
     <string name="status_title">模块状态</string>
     <string name="status_active">已连接 LSPosed</string>
     <string name="status_inactive">未激活</string>
+    <string name="status_lsposed_label">LSPosed</string>
+    <string name="status_root_label">Root</string>
+    <string name="state_connected">已连接</string>
+    <string name="state_disconnected">未连接</string>
+    <string name="state_checking">检测中…</string>
+    <string name="state_root_granted">已授权</string>
+    <string name="state_root_denied">未授权</string>
+    <string name="root_hint_checking">正在读取 Root 授权状态</string>
+    <string name="root_hint_granted">重启系统界面与重启系统可用</string>
+    <string name="root_hint_denied">重启类功能需要 Root 授权</string>
     <string name="status_scope_missing">作用域不完整</string>
     <string name="status_hint_active">静态作用域已就绪，修改开关后立即生效。</string>
     <string name="status_hint_inactive">请在 LSPosed 中启用本模块，然后重启系统界面。</string>
@@ -114,6 +124,7 @@
     <string name="fcm_targets_picker_title">选择 FCM 目标应用</string>
 
     <string name="section_notify_icon">通知图标同步</string>
+    <string name="section_notify_icon_header">系统界面 · 通知图标</string>
     <string name="group_notify_icon_summary">让通知栏图标跟随应用当前的桌面图标</string>
     <string name="notify_icon_enabled_title">跟随桌面图标</string>
     <string name="notify_icon_enabled_summary">支持在应用内换图标的客户端（如 AyuGram）换图标后，状态栏与通知面板的图标一起换</string>
@@ -158,6 +169,17 @@
     <string name="restart_running">正在重启系统界面…</string>
     <string name="restart_success">已发送重启指令，系统界面稍后会自动恢复</string>
     <string name="restart_failed">重启失败，请确认已授予 Root 权限，或手动重启系统界面</string>
+
+    <string name="restart_systemui_short">重启界面</string>
+    <string name="restart_system_short">重启系统</string>
+    <string name="open_lsposed_short">LSPosed</string>
+    <string name="tools_hint">重启界面只重载 SystemUI；重启系统需要 Root 权限。</string>
+    <string name="reboot_confirm_title">重启系统？</string>
+    <string name="reboot_confirm_message">手机将立即重启，未保存的内容会丢失。</string>
+    <string name="reboot_confirm_ok">重启</string>
+    <string name="reboot_sent">已发送重启指令</string>
+    <string name="reboot_failed">重启失败，请确认已授予 Root 权限</string>
+    <string name="open_lsposed_missing">没有找到 LSPosed 管理器</string>
 
     <string name="footer">HyperOS Mod v%1$s · LSPosed API 102</string>
     <string name="footer_scope">静态作用域：系统框架、系统界面、小米运动健康</string>
@@ -258,13 +280,6 @@
     <string name="panel_traffic_idle">↑ 0 B/s   ↓ 0 B/s</string>
     <string name="panel_stats_idle">总上传 — · 总下载 — · 连接 —</string>
     <string name="panel_stats">总上传 %1$s · 总下载 %2$s · 连接 %3$d</string>
-    <string name="panel_notify">通知栏显示网速与代理组</string>
-    <string name="panel_notify_text">↑ %1$s   ↓ %2$s</string>
-    <string name="panel_notify_channel">sing-box 状态</string>
-    <string name="panel_notify_resend">重新发送通知栏</string>
-    <string name="panel_notify_grant">去授予通知权限</string>
-    <string name="panel_notify_blocked">通知权限未授予，通知栏不会显示内容</string>
-    <string name="panel_notify_hint">在通知栏常驻显示实时速率和当前节点，需要通知权限</string>
     <string name="panel_traffic">↑ %1$s   ↓ %2$s</string>
     <string name="panel_refresh">刷新</string>
     <string name="panel_test_all">全部测速</string>
@@ -276,6 +291,13 @@
     <string name="panel_no_groups">控制接口没有返回任何代理分组</string>
     <string name="panel_unreachable">连不上控制接口：%1$s</string>
     <string name="panel_version">控制接口 %1$s</string>
+    <string name="panel_backend_checking">正在连接控制接口…</string>
+    <string name="panel_backend_ok">已连接 · %1$s</string>
+    <string name="panel_backend_connected">已连接</string>
+    <string name="panel_backend_failed">未连接 · %1$s</string>
+    <string name="panel_backend_unconfigured">未配置控制接口地址</string>
+    <string name="panel_session_waiting">连接数据暂不可用</string>
+    <string name="panel_session_meta">%1$d 个活跃连接 · ↑ %2$s ↓ %3$s</string>
     <string name="panel_connections">连接</string>
     <string name="conn_title">活动连接</string>
     <string name="conn_sort_speed">按下载速度</string>
