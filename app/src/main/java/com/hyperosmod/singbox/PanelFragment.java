@@ -31,9 +31,12 @@ import com.hyperosmod.databinding.ItemPanelNodeBinding;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -61,9 +64,14 @@ public final class PanelFragment extends Fragment {
 
     /** 节点类型（Vmess / Shadowsocks …），用于节点行第二段文字。 */
     private final Map<String, String> types = new HashMap<>();
-    /** 延迟缓存，key 是 "分组\u0000节点"。 */
-    private final Map<String, Integer> delays = new HashMap<>();
-    private final Map<String, Boolean> testing = new HashMap<>();
+    /**
+     * 延迟缓存，key 是<b>节点名</b>。
+     *
+     * <p>GLOBAL 分组包含全部节点，若按「分组+节点」缓存，同一节点会被测好几遍；
+     * 节点名相同就是同一条出站，测一次所有分组共用。</p>
+     */
+    private final Map<String, Integer> delays = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> testing = new ConcurrentHashMap<>();
 
     private final List<ClashApi.Group> groups = new ArrayList<>();
 
@@ -347,28 +355,32 @@ public final class PanelFragment extends Fragment {
     }
 
     private void testGroup(ClashApi.Group group) {
-        for (String node : group.all) {
-            startDelay(group.name, node);
+        for (String node : new LinkedHashSet<>(group.all)) {
+            startDelay(node);
         }
     }
 
+    /** 全部测速：同一个节点只测一次（GLOBAL 里重复出现的节点不再重复请求）。 */
     private void testAll() {
+        Set<String> nodes = new LinkedHashSet<>();
         for (ClashApi.Group group : groups) {
-            testGroup(group);
+            nodes.addAll(group.all);
+        }
+        for (String node : nodes) {
+            startDelay(node);
         }
     }
 
-    private void startDelay(String group, String node) {
-        String key = key(group, node);
-        if (Boolean.TRUE.equals(testing.get(key))) {
+    private void startDelay(String node) {
+        if (Boolean.TRUE.equals(testing.get(node))) {
             return;
         }
-        testing.put(key, true);
+        testing.put(node, true);
         adapter.notifyDataSetChanged();
         EXECUTOR.execute(() -> {
             int delay = api().delay(node, TEST_URL, 5000);
-            delays.put(key, delay);
-            testing.remove(key);
+            delays.put(node, delay);
+            testing.remove(node);
             runOnUi(() -> {
                 if (binding == null) {
                     return;
@@ -387,10 +399,6 @@ public final class PanelFragment extends Fragment {
     // ==================================================================================
     // 工具
     // ==================================================================================
-
-    private static String key(String group, String node) {
-        return group + "\u0000" + node;
-    }
 
     private void runOnUi(Runnable runnable) {
         if (isAdded()) {
@@ -415,7 +423,7 @@ public final class PanelFragment extends Fragment {
         int reachable = 0;
         boolean tested = false;
         for (String node : group.all) {
-            Integer delay = delays.get(key(group.name, node));
+            Integer delay = delays.get(node);
             if (delay == null) {
                 continue;
             }
@@ -432,7 +440,6 @@ public final class PanelFragment extends Fragment {
     private void bindNode(ItemPanelNodeBinding row, ClashApi.Group group, String node,
                           String suffix, View.OnClickListener onClick) {
         boolean selected = node.equals(group.now);
-        String key = key(group.name, node);
 
         row.nodeName.setText(node);
         int cardColor = MaterialColors.getColor(row.nodeCard,
@@ -450,10 +457,10 @@ public final class PanelFragment extends Fragment {
 
         String detail = "";
         int delayColor = 0;
-        if (Boolean.TRUE.equals(testing.get(key))) {
+        if (Boolean.TRUE.equals(testing.get(node))) {
             detail = getString(R.string.panel_testing);
-        } else if (delays.containsKey(key)) {
-            int delay = delays.get(key);
+        } else if (delays.containsKey(node)) {
+            int delay = delays.get(node);
             detail = delay == 0 ? getString(R.string.panel_timeout) : delay + " ms";
             // 只有延迟这个数字上色，类型与计数跟着卡片文字色走。
             delayColor = latencyColor(delay);
