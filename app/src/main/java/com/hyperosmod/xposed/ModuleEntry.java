@@ -103,19 +103,31 @@ public final class ModuleEntry extends XposedModule {
         if (!HookPrefs.getBoolean(com.hyperosmod.Keys.NOTIFY_ICON_ENABLED, false)) {
             return;
         }
+        // 只有两类进程需要装：被替换图标的应用自己（改它发出去的通知），以及真正画图标的
+        // 系统界面进程（状态栏 / 通知面板 / 息屏显示 / 桌面）。其它进程装上只会白白拖慢它，
+        // 还会因为找不到 StatusBarIconView 刷一堆警告。
+        boolean target = HookPrefs.getStringSet(com.hyperosmod.Keys.NOTIFY_ICON_TARGETS)
+                .contains(packageName);
+        boolean iconSurface = isIconSurfaceProcess(processName);
+        if (!target && !iconSurface) {
+            return;
+        }
         if (!iconHooksInstalled.compareAndSet(false, true)) {
             return;
         }
         Logs.i("notify-icon: 进程 " + processName + " 安装图标 hook");
-        if (HookPrefs.getStringSet(com.hyperosmod.Keys.NOTIFY_ICON_TARGETS).contains(packageName)) {
+        if (target) {
             try {
                 new NotifyIconHook(this, param.getClassLoader()).install();
             } catch (Throwable t) {
                 Logs.e("Failed to install Notification.Builder hooks", t);
             }
         }
+        if (!iconSurface) {
+            return;
+        }
         try {
-            new NotifyAppIconHook(this, param.getClassLoader()).install();
+            new NotifyAppIconHook(this, param.getClassLoader(), processName).install();
         } catch (Throwable t) {
             Logs.e("Failed to install app-icon hooks", t);
         }
@@ -124,5 +136,12 @@ public final class ModuleEntry extends XposedModule {
         } catch (Throwable t) {
             Logs.e("Failed to install AOD view hooks", t);
         }
+    }
+
+    /** 真正负责绘制图标界面的进程：状态栏 / 通知面板、息屏显示、桌面（含最近任务）。 */
+    private static boolean isIconSurfaceProcess(String processName) {
+        return processName.startsWith("com.android.systemui")
+                || processName.startsWith("com.miui.aod")
+                || processName.startsWith("com.miui.home");
     }
 }

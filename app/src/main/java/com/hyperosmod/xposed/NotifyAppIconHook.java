@@ -50,10 +50,16 @@ final class NotifyAppIconHook {
 
     private final XposedInterface xposed;
     private final ClassLoader classLoader;
+    private final String processName;
 
     NotifyAppIconHook(XposedInterface xposed, ClassLoader classLoader) {
+        this(xposed, classLoader, "");
+    }
+
+    NotifyAppIconHook(XposedInterface xposed, ClassLoader classLoader, String processName) {
         this.xposed = xposed;
         this.classLoader = classLoader;
+        this.processName = processName == null ? "" : processName;
     }
 
     void install() {
@@ -479,7 +485,11 @@ final class NotifyAppIconHook {
                     "com.android.systemui.statusbar.views.MiuiStatusBarIconView");
         }
         if (type == null) {
-            Logs.w(LOG_TAG + "找不到 StatusBarIconView，跳过兜底", null);
+            // 这个类只在 SystemUI 里存在，桌面 / 息屏显示等进程没有它是正常的，
+            // 安静跳过即可，不然每次开机都会在每个注入进程里留一条警告。
+            if (processName.startsWith("com.android.systemui")) {
+                Logs.i(LOG_TAG + "SystemUI 里没找到 StatusBarIconView，通知图标兜底未安装");
+            }
             return;
         }
         int hooked = 0;
