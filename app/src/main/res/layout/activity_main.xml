@@ -439,23 +439,38 @@
             android:orientation="vertical"
             android:visibility="gone">
 
+            <com.google.android.material.tabs.TabLayout
+                android:id="@+id/tab_singbox_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                app:tabGravity="fill"
+                app:tabIndicatorFullWidth="false"
+                app:tabMode="fixed">
+
+                <com.google.android.material.tabs.TabItem
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/singbox_segment_manage" />
+
+                <com.google.android.material.tabs.TabItem
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/singbox_web_title" />
+            </com.google.android.material.tabs.TabLayout>
+
             <FrameLayout
                 android:id="@+id/container_singbox"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/page_panel"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:visibility="gone">
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <FrameLayout
                 android:id="@+id/container_panel"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:visibility="gone" />
         </LinearLayout>
     </FrameLayout>
 

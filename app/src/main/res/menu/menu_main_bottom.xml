@@ -12,8 +12,4 @@
         android:id="@+id/tab_singbox"
         android:icon="@drawable/ic_singbox_tile"
         android:title="@string/tab_singbox" />
-    <item
-        android:id="@+id/tab_panel"
-        android:icon="@drawable/ic_tab_proxy"
-        android:title="@string/tab_web" />
 </menu>

@@ -225,6 +225,7 @@
     <string name="tab_statusbar">状态栏</string>
     <string name="tab_system">系统</string>
     <string name="tab_singbox">sing-box</string>
+    <string name="singbox_segment_manage">管理</string>
     <string name="tab_web">面板</string>
     <string name="singbox_tab_control">控制</string>
     <string name="singbox_tab_version">版本</string>

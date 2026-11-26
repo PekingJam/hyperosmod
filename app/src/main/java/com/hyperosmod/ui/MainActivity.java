@@ -5,6 +5,8 @@ import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
 
@@ -63,6 +65,16 @@ public final class MainActivity extends AppCompatActivity {
         bindStatusBarRows();
         bindGroupRows();
 
+        installSwipeNavigation();
+
+        binding.tabSingboxMode.addOnTabSelectedListener(new com.google.android.material.tabs.TabLayout.OnTabSelectedListener() {
+            @Override public void onTabSelected(com.google.android.material.tabs.TabLayout.Tab tab) {
+                showSingboxSegment(tab.getPosition());
+            }
+            @Override public void onTabUnselected(com.google.android.material.tabs.TabLayout.Tab tab) { }
+            @Override public void onTabReselected(com.google.android.material.tabs.TabLayout.Tab tab) { }
+        });
+
         binding.bottomNav.setOnItemSelectedListener(item -> {
             showPage(item.getItemId());
             return true;
@@ -94,14 +106,15 @@ public final class MainActivity extends AppCompatActivity {
         int tab = intent == null ? -1
                 : intent.getIntExtra(TileEntryActivity.EXTRA_TAB, -1);
         int target;
-        if (tab == TileEntryActivity.TAB_WEB) {
-            target = R.id.tab_panel;
-        } else if (tab == TileEntryActivity.TAB_PANEL) {
+        boolean web = tab == TileEntryActivity.TAB_WEB;
+        if (web || tab == TileEntryActivity.TAB_PANEL) {
             target = R.id.tab_singbox;
         } else {
             target = R.id.tab_system;
         }
         binding.bottomNav.setSelectedItemId(target);
+        // 底部 tab 选中是异步的，等它就位后再切分段，否则会被 showPage 的默认分段覆盖。
+        binding.bottomNav.post(() -> selectSingboxSegment(web ? SEGMENT_WEB : SEGMENT_MANAGE));
     }
 
     @Override
@@ -179,9 +192,13 @@ public final class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    /** sing-box 页内的两段：管理（控制/版本/配置入口）与网页面板。 */
+    private static final int SEGMENT_MANAGE = 0;
+    private static final int SEGMENT_WEB = 1;
+
     /**
-     * 底部导航：状态栏 / 系统 共用滚动区；sing-box 与网页各是一块 fragment 容器，
-     * 首次切到对应 tab 时才创建，避免启动时就把 WebView 和 root 调用拉起来。
+     * 底部导航：状态栏 / 系统 共用滚动区；sing-box 页里再分「管理 / 网页面板」两段，
+     * 首次切到某一段时才创建对应 fragment，避免启动时就把 WebView 和 root 调用拉起来。
      */
     private void showPage(int itemId) {
         boolean scroll = itemId == R.id.tab_statusbar || itemId == R.id.tab_system;
@@ -190,14 +207,152 @@ public final class MainActivity extends AppCompatActivity {
                 itemId == R.id.tab_statusbar ? View.VISIBLE : View.GONE);
         binding.pageSystem.setVisibility(itemId == R.id.tab_system ? View.VISIBLE : View.GONE);
         binding.pageSingbox.setVisibility(itemId == R.id.tab_singbox ? View.VISIBLE : View.GONE);
-        binding.pagePanel.setVisibility(itemId == R.id.tab_panel ? View.VISIBLE : View.GONE);
         if (itemId == R.id.tab_singbox) {
-            ensureFragment(R.id.container_singbox, SingBoxFragment::new, "singbox");
-        } else if (itemId == R.id.tab_panel) {
-            ensureFragment(R.id.container_panel, PanelFragment::new, "panel");
-            notifyPanelVisible();
+            com.google.android.material.tabs.TabLayout.Tab tab =
+                    binding.tabSingboxMode.getTabAt(binding.tabSingboxMode.getSelectedTabPosition());
+            showSingboxSegment(tab == null ? SEGMENT_MANAGE : tab.getPosition());
         }
         binding.scrollContent.scrollTo(0, 0);
+    }
+
+    private void selectSingboxSegment(int segment) {
+        com.google.android.material.tabs.TabLayout.Tab tab = binding.tabSingboxMode.getTabAt(segment);
+        if (tab != null) {
+            tab.select();
+        } else {
+            showSingboxSegment(segment);
+        }
+    }
+
+    /** 只切内容容器，不重建已存在的 fragment：面板里的 WebView 不会因为来回切而重新加载。 */
+    private void showSingboxSegment(int segment) {
+        boolean web = segment == SEGMENT_WEB;
+        binding.containerSingbox.setVisibility(web ? View.GONE : View.VISIBLE);
+        binding.containerPanel.setVisibility(web ? View.VISIBLE : View.GONE);
+        if (web) {
+            ensureFragment(R.id.container_panel, PanelFragment::new, "panel");
+            notifyPanelVisible();
+        } else {
+            ensureFragment(R.id.container_singbox, SingBoxFragment::new, "singbox");
+        }
+    }
+
+    // ───────────────────────── 左右滑动切 tab ─────────────────────────
+
+    /** 一级 tab 的顺序，横滑时按这个数组前后走。 */
+    private static final int[] TAB_ORDER = {R.id.tab_system, R.id.tab_statusbar, R.id.tab_singbox};
+    private static final float SWIPE_MIN_VELOCITY = 900f;      // px/s，太慢当成拖拽
+    private GestureDetector swipeDetector;
+    private boolean touchStartedInPanel;
+
+    /**
+     * 在 Activity 的 dispatch 层识别横滑，不拦截事件（照常下发给子 View），
+     * 所以列表照样能上下滚、面板照样能滚、TabLayout 照样能点。
+     */
+    private void installSwipeNavigation() {
+        final float density = getResources().getDisplayMetrics().density;
+        final int minDistance = (int) (density * 72);       // 普通页面：72dp
+        final int panelDistance = (int) (density * 150);    // 网页面板：150dp，避免和网页横向拖动打架
+        swipeDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onFling(MotionEvent down, MotionEvent up, float velocityX, float velocityY) {
+                if (down == null || up == null) {
+                    return false;
+                }
+                float dx = up.getX() - down.getX();
+                float dy = up.getY() - down.getY();
+                float required = touchStartedInPanel ? panelDistance : minDistance;
+                if (Math.abs(dx) < required) {
+                    return false;
+                }
+                // 竖直分量大于横向的三分之二，说明是在滚页面，不是切 tab
+                if (Math.abs(dx) < Math.abs(dy) * 1.5f) {
+                    return false;
+                }
+                if (Math.abs(velocityX) < SWIPE_MIN_VELOCITY) {
+                    return false;
+                }
+                if (dx < 0) {
+                    goNextPage();
+                } else {
+                    goPreviousPage();
+                }
+                return true;
+            }
+        });
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (swipeDetector != null) {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                touchStartedInPanel = isInside(event.getRawX(), event.getRawY(), binding.containerPanel);
+            }
+            swipeDetector.onTouchEvent(event);
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    /** 触点是否落在某个 View 上（统一用屏幕坐标比较，避开窗口/状态栏偏移）。 */
+    private static boolean isInside(float rawX, float rawY, View view) {
+        if (view == null || view.getVisibility() != View.VISIBLE || view.getWidth() == 0) {
+            return false;
+        }
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        return rawX >= location[0] && rawX <= location[0] + view.getWidth()
+                && rawY >= location[1] && rawY <= location[1] + view.getHeight();
+    }
+
+    private int currentTabIndex() {
+        int id = binding.bottomNav.getSelectedItemId();
+        for (int i = 0; i < TAB_ORDER.length; i++) {
+            if (TAB_ORDER[i] == id) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /** 往左滑：下一个；sing-box 页里先管理 → 网页面板。 */
+    private void goNextPage() {
+        if (binding.bottomNav.getSelectedItemId() == R.id.tab_singbox) {
+            if (binding.containerPanel.getVisibility() != View.VISIBLE) {
+                selectSingboxSegment(SEGMENT_WEB);
+                return;
+            }
+            return;                       // 已经在最后一段，不再往后
+        }
+        int next = currentTabIndex() + 1;
+        if (next < TAB_ORDER.length) {
+            binding.bottomNav.setSelectedItemId(TAB_ORDER[next]);
+            slideIn(1);
+        }
+    }
+
+    /** 往右滑：上一个；sing-box 页里先网页面板 → 管理。 */
+    private void goPreviousPage() {
+        if (binding.bottomNav.getSelectedItemId() == R.id.tab_singbox
+                && binding.containerPanel.getVisibility() == View.VISIBLE) {
+            selectSingboxSegment(SEGMENT_MANAGE);
+            return;
+        }
+        int previous = currentTabIndex() - 1;
+        if (previous >= 0) {
+            binding.bottomNav.setSelectedItemId(TAB_ORDER[previous]);
+            slideIn(-1);
+        }
+    }
+
+    /** 轻微的横向滑入动画：direction 1 = 从右边进来，-1 = 从左边进来。 */
+    private void slideIn(int direction) {
+        View page = binding.scrollContent.getVisibility() == View.VISIBLE
+                ? binding.scrollContent : binding.pageSingbox;
+        float offset = getResources().getDisplayMetrics().density * 36 * direction;
+        page.animate().cancel();
+        page.setTranslationX(offset);
+        page.setAlpha(0.35f);
+        page.animate().translationX(0f).alpha(1f).setDuration(170).start();
     }
 
     /** 面板页每次被切过来时通知一次：它自己决定要不要自动跑全量测速。 */
