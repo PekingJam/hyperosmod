@@ -67,12 +67,6 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
-            android:name=".ui.DualSignalSettingsActivity"
-            android:exported="false"
-            android:label="@string/dual_signal_detail_title"
-            android:parentActivityName=".ui.MainActivity" />
-
-        <activity
             android:name=".singbox.ConnectionsActivity"
             android:exported="false"
             android:label="@string/conn_title"

@@ -36,7 +36,6 @@ public final class BlockedAppsActivity extends AppCompatActivity {
     public static final int MODE_BLOCK_UPDATES = 0;
     public static final int MODE_TELEPHONY_TARGETS = 1;
     public static final int MODE_FCM_TARGETS = 2;
-    public static final int MODE_NOTIFY_ICON_TARGETS = 3;
     public static final int MODE_KEYGUARD_NOTIFY_TARGETS = 4;
 
     private ActivityBlockedAppsBinding binding;
@@ -63,9 +62,6 @@ public final class BlockedAppsActivity extends AppCompatActivity {
             case MODE_FCM_TARGETS:
                 storeKey = Keys.FCM_TARGETS;
                 break;
-            case MODE_NOTIFY_ICON_TARGETS:
-                storeKey = Keys.NOTIFY_ICON_TARGETS;
-                break;
             case MODE_KEYGUARD_NOTIFY_TARGETS:
                 storeKey = Keys.KEYGUARD_NOTIFY_TARGETS;
                 break;
@@ -83,8 +79,6 @@ public final class BlockedAppsActivity extends AppCompatActivity {
             titleRes = R.string.telephony_targets_picker_title;
         } else if (mode == MODE_FCM_TARGETS) {
             titleRes = R.string.fcm_targets_picker_title;
-        } else if (mode == MODE_NOTIFY_ICON_TARGETS) {
-            titleRes = R.string.notify_icon_targets_picker_title;
         } else if (mode == MODE_KEYGUARD_NOTIFY_TARGETS) {
             titleRes = R.string.keyguard_notify_targets_picker_title;
         } else {
@@ -254,30 +248,6 @@ public final class BlockedAppsActivity extends AppCompatActivity {
         selectedPackages = new HashSet<>(selected);
         Prefs.setStringSet(storeKey, selected);
         binding.selectedCount.setText(getString(countStringRes(), selected.size()));
-        if (mode == MODE_NOTIFY_ICON_TARGETS) {
-            warnMissingScope(selected);
-        }
-    }
-
-    /** 勾了但没有 LSPosed 作用域的应用收不到 hook，当场提醒一句，别让他去猜。 */
-    private final Set<String> scopeWarned = new HashSet<>();
-
-    private void warnMissingScope(Set<String> selected) {
-        for (String packageName : selected) {
-            if (scopeWarned.contains(packageName) || App.isInScope(packageName)) {
-                continue;
-            }
-            scopeWarned.add(packageName);
-            String label;
-            try {
-                label = getPackageManager().getApplicationLabel(
-                        getPackageManager().getApplicationInfo(packageName, 0)).toString();
-            } catch (Throwable t) {
-                label = packageName;
-            }
-            Toast.makeText(this, getString(R.string.notify_icon_scope_missing, label),
-                    Toast.LENGTH_LONG).show();
-        }
     }
 
     private void updateEmptyState() {

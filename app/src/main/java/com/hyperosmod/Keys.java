@@ -42,38 +42,15 @@ public final class Keys {
     public static final String GESTURE_LINE_LOCK = "gesture_line_lock";
     /** SystemUI: override the Monet seed color. */
     public static final String CUSTOM_THEME_ENABLED = "custom_theme_enabled";
+    /**
+     * 允许安装/应用第三方主题：放行 miui.drm.DrmManager.isLegal 的 DRM 校验。
+     * 需要 system 与 com.android.thememanager 两个作用域。
+     */
+    public static final String ALLOW_THIRD_THEME = "allow_third_theme";
     /** SystemUI: ARGB seed color used when {@link #CUSTOM_THEME_ENABLED} is on. */
     public static final String CUSTOM_THEME_COLOR = "custom_theme_color";
-    /** SystemUI: stack the two SIM signal icons and show the data SIM network type first. */
-    public static final String DUAL_ROW_SIGNAL = "dual_row_signal";
-    /** SystemUI: percentage scale of the dual-row signal icon. */
-    public static final String DUAL_SIGNAL_SCALE = "dual_signal_scale";
-    /** SystemUI: percentage thickness of the dual-row signal bars/dots. */
-    public static final String DUAL_SIGNAL_THICKNESS = "dual_signal_thickness";
-    /** SystemUI: percentage scale of the 5G / 4G network type text. */
-    public static final String DUAL_TEXT_SCALE = "dual_signal_text_scale";
-    /** SystemUI: percentage weight of the 5G / 4G network type text. */
-    public static final String DUAL_TEXT_THICKNESS = "dual_signal_text_thickness";
-    public static final int DUAL_SIGNAL_SCALE_MIN = 75;
-    public static final int DUAL_SIGNAL_SCALE_MAX = 200;
-    public static final int DUAL_SIGNAL_SCALE_DEFAULT = 175;
-    public static final int DUAL_SIGNAL_THICKNESS_MIN = 50;
-    public static final int DUAL_SIGNAL_THICKNESS_MAX = 200;
-    public static final int DUAL_SIGNAL_THICKNESS_DEFAULT = 125;
-    public static final int DUAL_TEXT_SCALE_MIN = 75;
-    public static final int DUAL_TEXT_SCALE_MAX = 200;
-    public static final int DUAL_TEXT_SCALE_DEFAULT = 100;
-    public static final int DUAL_TEXT_THICKNESS_MIN = 50;
-    public static final int DUAL_TEXT_THICKNESS_MAX = 200;
-    public static final int DUAL_TEXT_THICKNESS_DEFAULT = 100;
-
     /** SystemUI: show seconds in the status bar clock. */
     public static final String CLOCK_SECONDS = "status_bar_clock_seconds";
-
-    /** 通知图标跟随应用当前的桌面图标（换图标的应用专用）。 */
-    public static final String NOTIFY_ICON_ENABLED = "notify_icon_enabled";
-    /** Set&lt;String&gt; of packages whose notification icon should follow the launcher icon. */
-    public static final String NOTIFY_ICON_TARGETS = "notify_icon_targets";
 
     /** system_server: reject updates of the packages in {@link #BLOCKED_PACKAGES}. */
     public static final String BLOCK_UPDATES_ENABLED = "block_updates_enabled";

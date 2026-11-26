@@ -233,8 +233,6 @@ public final class MainActivity extends AppCompatActivity {
                 R.string.group_telephony_summary, GroupSettingsActivity.GROUP_TELEPHONY);
         bindGroup(binding.rowGroupFcm, R.string.section_fcm,
                 R.string.group_fcm_summary, GroupSettingsActivity.GROUP_FCM);
-        bindGroup(binding.rowGroupNotifyIcon, R.string.section_notify_icon,
-                R.string.group_notify_icon_summary, GroupSettingsActivity.GROUP_NOTIFY_ICON);
     }
 
     private void bindGroup(com.hyperosmod.databinding.RowAppsBinding row, int title,
@@ -249,6 +247,17 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void bindThemeRows() {
+        bindSwitch(binding.rowAllowThirdTheme, Keys.ALLOW_THIRD_THEME,
+                R.string.allow_third_theme_title, R.string.allow_third_theme_summary);
+        binding.rowAllowThirdTheme.switchView.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.setBoolean(Keys.ALLOW_THIRD_THEME, checked);
+            // 主题商店不在作用域里时，导入校验发生在它自己进程，光开开关没用——当场提示。
+            if (checked && !App.isInScope("com.android.thememanager")) {
+                Toast.makeText(this, R.string.allow_third_theme_scope_missing,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+
         bindSwitch(binding.rowCustomTheme, Keys.CUSTOM_THEME_ENABLED,
                 R.string.custom_theme_title, R.string.custom_theme_summary);
         binding.rowCustomTheme.switchView.setOnCheckedChangeListener((button, checked) -> {
@@ -269,29 +278,11 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    /** 状态栏只剩「时钟显秒」。 */
     private void bindStatusBarRows() {
-        bindSwitch(binding.rowDualSignal, Keys.DUAL_ROW_SIGNAL,
-                R.string.dual_signal_title, R.string.dual_signal_summary);
-        binding.rowDualSignal.switchView.setOnCheckedChangeListener((button, checked) -> {
-            Prefs.setBoolean(Keys.DUAL_ROW_SIGNAL, checked);
-            updateDualSignalRows();
-        });
         bindSwitch(binding.rowClockSeconds, Keys.CLOCK_SECONDS,
                 R.string.clock_seconds_title, R.string.clock_seconds_summary);
-        binding.rowDualSignalDetail.title.setText(R.string.dual_signal_detail_title);
-        binding.rowDualSignalDetail.summary.setText(R.string.dual_signal_detail_summary);
-        binding.rowDualSignalDetail.getRoot().setOnClickListener(v ->
-                startActivity(new Intent(this, DualSignalSettingsActivity.class)));
     }
-
-    private void updateDualSignalRows() {
-        boolean enabled = Prefs.getBoolean(Keys.DUAL_ROW_SIGNAL, false);
-        binding.dualSignalHint.setVisibility(enabled ? View.GONE : View.VISIBLE);
-        binding.rowDualSignalDetail.summary.setText(enabled
-                ? R.string.dual_signal_detail_summary
-                : R.string.dual_signal_detail_summary_off);
-    }
-
 
     private void checkPermissions() {
         if (!PermissionHelper.hasAppListAccess(this)) {
@@ -354,13 +345,10 @@ public final class MainActivity extends AppCompatActivity {
     private void refreshAll() {
         binding.rowCustomTheme.switchView.setChecked(
                 Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false));
-        binding.rowDualSignal.switchView.setChecked(
-                Prefs.getBoolean(Keys.DUAL_ROW_SIGNAL, false));
         binding.rowClockSeconds.switchView.setChecked(
                 Prefs.getBoolean(Keys.CLOCK_SECONDS, false));
 
         updateThemeRow();
-        updateDualSignalRows();
         pruneUninstalledTargets();
         refreshStatus();
     }
@@ -386,7 +374,6 @@ public final class MainActivity extends AppCompatActivity {
         pruneOne(Keys.BLOCKED_PACKAGES);
         pruneOne(Keys.TELEPHONY_TARGETS);
         pruneOne(Keys.FCM_TARGETS);
-        pruneOne(Keys.NOTIFY_ICON_TARGETS);
     }
 
     private void pruneOne(String key) {

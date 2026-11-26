@@ -12,9 +12,6 @@ import io.github.libxposed.api.XposedModule;
  */
 public final class ModuleEntry extends XposedModule {
     private String processName = "";
-    /** 一个进程里只装一次通知图标 hook（同一个进程可能对应多个包）。 */
-    private static final java.util.concurrent.atomic.AtomicBoolean iconHooksInstalled =
-            new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
@@ -32,6 +29,11 @@ public final class ModuleEntry extends XposedModule {
             Logs.e("Failed to install update guard", t);
         }
         try {
+            new ThemeHooks(this, param.getClassLoader()).install(false);
+        } catch (Throwable t) {
+            Logs.e("Failed to install theme DRM hooks", t);
+        }
+        try {
             new FcmSystemHooks(this, param.getClassLoader()).install();
         } catch (Throwable t) {
             Logs.e("Failed to install FCM system hooks", t);
@@ -41,7 +43,6 @@ public final class ModuleEntry extends XposedModule {
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
         String packageName = param.getPackageName();
-        installNotifyIconHooks(param, packageName);
         if (!param.isFirstPackage()) {
             return;
         }
@@ -59,6 +60,15 @@ public final class ModuleEntry extends XposedModule {
                 new GestureLineHook(this, param.getClassLoader()).install();
             } catch (Throwable t) {
                 Logs.e("Failed to install gesture-line hooks", t);
+            }
+            return;
+        }
+        if ("com.android.thememanager".equals(packageName)) {
+            // 主题商店里没有其它功能，DRM 校验一律放行即可，范围可控。
+            try {
+                new ThemeHooks(this, param.getClassLoader()).install(true);
+            } catch (Throwable t) {
+                Logs.e("Failed to install theme manager DRM hooks", t);
             }
             return;
         }
@@ -85,63 +95,5 @@ public final class ModuleEntry extends XposedModule {
                 Logs.e("Failed to install FCM powerkeeper hooks", t);
             }
         }
-    }
-
-    /**
-     * 通知图标同步。
-     *
-     * <p>不猜「哪个应用负责画图标」：只要进程被注入了（= 用户勾进了作用域）就装上图标来源
-     * 改写，真正生效与否由目标包名名单在运行期判断。这样换 ROM、换 AOD 实现都不用再改代码。</p>
-     *
-     * <p>system_server 排除在外：那里的 Resources / PackageItemInfo 调用太密集，而且
-     * 系统进程也不需要这个功能。</p>
-     */
-    private void installNotifyIconHooks(PackageReadyParam param, String packageName) {
-        if ("android".equals(packageName) || "android".equals(processName)) {
-            return;
-        }
-        if (!HookPrefs.getBoolean(com.hyperosmod.Keys.NOTIFY_ICON_ENABLED, false)) {
-            return;
-        }
-        // 只有两类进程需要装：被替换图标的应用自己（改它发出去的通知），以及真正画图标的
-        // 系统界面进程（状态栏 / 通知面板 / 息屏显示 / 桌面）。其它进程装上只会白白拖慢它，
-        // 还会因为找不到 StatusBarIconView 刷一堆警告。
-        boolean target = HookPrefs.getStringSet(com.hyperosmod.Keys.NOTIFY_ICON_TARGETS)
-                .contains(packageName);
-        boolean iconSurface = isIconSurfaceProcess(processName);
-        if (!target && !iconSurface) {
-            return;
-        }
-        if (!iconHooksInstalled.compareAndSet(false, true)) {
-            return;
-        }
-        Logs.i("notify-icon: 进程 " + processName + " 安装图标 hook");
-        if (target) {
-            try {
-                new NotifyIconHook(this, param.getClassLoader()).install();
-            } catch (Throwable t) {
-                Logs.e("Failed to install Notification.Builder hooks", t);
-            }
-        }
-        if (!iconSurface) {
-            return;
-        }
-        try {
-            new NotifyAppIconHook(this, param.getClassLoader(), processName).install();
-        } catch (Throwable t) {
-            Logs.e("Failed to install app-icon hooks", t);
-        }
-        try {
-            new AodIconHook(this, param.getClassLoader()).install();
-        } catch (Throwable t) {
-            Logs.e("Failed to install AOD view hooks", t);
-        }
-    }
-
-    /** 真正负责绘制图标界面的进程：状态栏 / 通知面板、息屏显示、桌面（含最近任务）。 */
-    private static boolean isIconSurfaceProcess(String processName) {
-        return processName.startsWith("com.android.systemui")
-                || processName.startsWith("com.miui.aod")
-                || processName.startsWith("com.miui.home");
     }
 }

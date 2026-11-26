@@ -4,7 +4,7 @@
 
 功能来源：
 
-- 锁屏通知、主题色与双排信号：参考 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)
+- 锁屏通知与主题色：参考 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)
 - 小米运动健康勿扰同步：参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)
 - HyperOS Passkey 修复：整合自 [HyperPasskey](https://github.com/Howard20181/HyperPasskey)
 - FCM/GCM 推送修复：参考 [fcmfix](https://github.com/kooritea/fcmfix)
@@ -31,9 +31,9 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| 双排信号图标 | 双卡时将两个 SIM 的信号图标竖向堆叠，并在前方显示当前数据流量卡的网络类型（5G / 4G / 3G / 2G）。数据卡位于上行并使用阶梯式信号条，副卡位于下行并使用圆点；信号与文字颜色会跟随状态栏图标的明暗与着色。支持在设置中分别调整信号图标大小（75%–200%）、信号条/圆点粗细（50%–200%）、5G / 4G 文本大小（75%–200%）和文本字重（50%–200%）。 |
+| 状态栏时钟显示秒 | 在状态栏时钟后追加秒数，按当前 12 / 24 小时制自动排版。 |
 
-> 仅双卡时生效，单卡保持官方样式；关闭开关会恢复官方横向排列。功能只改变图标展示，不会修改网络制式或数据卡设置。该实现参考了 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler) 的双排信号方案。
+> 状态栏相关功能只有「时钟显秒」这一项。关闭开关会立刻还原成官方样式，不需要重启系统界面。
 
 ### 应用更新保护
 
@@ -140,7 +140,7 @@ com.miui.powerkeeper
 
 建议按需勾选：
 
-- 使用锁屏/主题色/双排信号：勾选 `com.android.systemui`；
+- 使用锁屏/主题色/时钟显秒：勾选 `com.android.systemui`；
 - 使用应用更新保护：勾选 `system`；
 - 使用运动健康勿扰同步：勾选 `com.mi.health`（旧版另加 `com.xiaomi.wearable`）；
 - 使用 Passkey 修复：勾选 `system`、`com.android.settings`、`com.miui.securitycenter`、`com.xiaomi.scanner`；
@@ -248,8 +248,6 @@ app/src/main/
 │       ├── ModuleEntry.java         # libxposed API 102 入口
 │       ├── HookPrefs.java           # Hook 进程读取远程配置
 │       ├── SystemUiHooks.java       # 锁屏通知 + 主题色
-│       ├── DualSignalHook.java      # 双排信号图标 + 数据卡网络类型
-│       ├── DualSignalView.java      # 自绘 5G 文本与双排信号条
 │       ├── UpdateGuard.java         # 应用更新保护
 │       ├── MiFitnessHooks.java      # 小米运动健康勿扰同步
 │       ├── TelephonyHooks.java      # 电话 / SIM 信息伪装
@@ -277,14 +275,6 @@ LSPosed API 102 提供远程 SharedPreferences。应用进程把配置写入自�
 
 Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `FitnessApp.onCreate()` 中的 `registerZenListener()` 在模块放行之前就已经被挡掉。因此只 Hook 判断还不够，必须在启动后重新注册一次 `zen_mode` ContentObserver，并主动拉取一次手环规则。
 
-### 双排信号是如何实现的
-
-- Hook `ModernStatusBarMobileView#constructAndBind`，缓存每个 `subId` 的移动信号视图；
-- Hook `MobileSignalController#notifyListeners` 读取每个 SIM 的 `mCurrentState`（`connected`、`dataSim`、`signalStrength.getMiuiLevel()`），并监听 `MiuiMobileIconBinder#bind` 取得状态栏图标的着色信息；
-- 在 `mobile_group` 中注入自绘容器：左侧是当前数据卡的 `5G` / `4G` 文本，右侧是两行信号（主卡在上、使用阶梯式信号条；副卡在下、使用圆点）；文本和信号图标是独立子视图，图标大小/粗细与文本大小/字重分别调节；
-- 官方 `mobile_signal`、`mobile_type` 以及其余 SIM 的整个移动视图会被折叠为 1px 并设为透明，避免出现重复图标；
-- 通过 `JavaAdapterKt#collectFlow` 跟随 `showName` 与 tint 变化；如果 `MobileSignalController` 不可用，则回退到 `TelephonyManager`，并在功能开启期间每 10 秒刷新一次。
-
 ### 电话/SIM 伪装如何覆盖所有卡
 
 - 无参 getter 使用设置中的“默认卡”；
@@ -300,7 +290,6 @@ Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `Fit
 - 目标应用必须同时在 LSPosed 作用域和模块的“目标应用”列表中，二者缺一不可。
 - 被保护应用仍可通过“先卸载再安装”的方式绕过更新保护（这属于全新安装）。
 - 主题色使用 SystemUI 的私有方法；如果 HyperOS 后续修改该方法签名，需要同步调整。
-- 双排信号依赖 HyperOS 3 的 `ModernStatusBarMobileView` / `MobileSignalController` 内部字段；系统升级后如果类名或字段变化，需要同步调整。网络类型优先读取 SystemUI 的 `showName`，读取失败时回退到 `TelephonyManager`。
 - 更新保护通过系统安装器实现，不会阻止应用商店下载 APK，只会在安装阶段拒绝。
 - 勿扰同步依赖小米运动健康自身的类；运动健康版本变化后可能需要更新 Hook。
 - 勿扰访问权限由系统校验，模块只能提示和跳转，不能代授。
@@ -310,7 +299,7 @@ Android 15+ 上官方在 `isSupportZenMode()` 处直接返回 `false`，而 `Fit
 
 ## 致谢与许可
 
-- 锁屏通知限制、解锁后保留通知、自定义主题色、双排信号图标：参考 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)（AGPL-3.0）
+- 锁屏通知限制、解锁后保留通知、自定义主题色：参考 [HyperCeiler](https://github.com/ReChronoRain/HyperCeiler)（AGPL-3.0）
 - 勿扰同步：参考 [MiFitnessAdAway](https://github.com/hao1196561270/MiFitnessAdAway)（AGPL-3.0）
 - Passkey 修复与 hiddenapi stubs：来自 [HyperPasskey](https://github.com/Howard20181/HyperPasskey)（GPL-3.0，AGPL-3.0 项目可兼容整合）
 - FCM 修复：参考 [fcmfix](https://github.com/kooritea/fcmfix)（GPL-3.0）与 [FCMGuard-HyperOS](https://github.com/ReedGAOOO/FCMGuard-HyperOS)（MIT）
