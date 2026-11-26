@@ -239,7 +239,16 @@
     <string name="singbox_entry_config">配置文件</string>
     <string name="singbox_entry_config_summary">订阅地址、在线编辑、校验与云盘上传</string>
     <string name="singbox_section_more">更多设置</string>
+    <!-- 网页面板（WebView）与服务控制按钮 -->
+    <string name="panel_web_loading">正在加载面板…</string>
+    <string name="panel_web_error">打不开面板页面：%1$s\n\n请确认本地面板已经在跑，端口没写错。</string>
+    <string name="panel_update">更新</string>
+    <string name="panel_update_title">更新 sing-box</string>
+    <string name="panel_update_message">更新到当前通道的最新版？服务在运行时会自动重启。</string>
+    <string name="panel_update_ok">开始更新</string>
+    <string name="panel_version_entry">版本</string>
     <string name="panel_current_none">等待控制接口…</string>
+
     <string name="panel_current">%1$s · %2$s</string>
     <string name="panel_traffic_idle">↑ 0 B/s   ↓ 0 B/s</string>
     <string name="panel_stats_idle">总上传 — · 总下载 — · 连接 —</string>

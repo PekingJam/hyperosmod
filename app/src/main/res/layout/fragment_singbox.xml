@@ -172,16 +172,6 @@
                 android:orientation="vertical">
 
                 <include
-                    android:id="@+id/row_version"
-                    layout="@layout/row_apps" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginStart="18dp"
-                    android:background="?attr/colorOutlineVariant" />
-
-                <include
                     android:id="@+id/row_config"
                     layout="@layout/row_apps" />
 

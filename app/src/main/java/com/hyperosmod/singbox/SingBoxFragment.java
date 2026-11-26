@@ -51,11 +51,6 @@ public final class SingBoxFragment extends Fragment {
         binding.btnLogCopy.setOnClickListener(v -> copyLog());
         binding.btnLogClear.setOnClickListener(v -> binding.output.setText(""));
 
-        binding.rowVersion.title.setText(R.string.singbox_entry_version);
-        binding.rowVersion.summary.setText(R.string.singbox_entry_version_summary);
-        binding.rowVersion.getRoot().setOnClickListener(v ->
-                startActivity(new Intent(requireContext(), SingBoxVersionActivity.class)));
-
         binding.rowConfig.title.setText(R.string.singbox_entry_config);
         binding.rowConfig.summary.setText(R.string.singbox_entry_config_summary);
         binding.rowConfig.getRoot().setOnClickListener(v ->
