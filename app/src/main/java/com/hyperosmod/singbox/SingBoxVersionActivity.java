@@ -46,6 +46,10 @@ public final class SingBoxVersionActivity extends AppCompatActivity {
                 finish(getString(R.string.singbox_no_release));
                 return;
             }
+            if (!switchChannel && !SingBoxController.isNewerThanInstalled(release, status.version)) {
+                finish(getString(R.string.singbox_already_latest, status.version));
+                return;
+            }
             RootShell.Result result = SingBoxController.install(this, release,
                     step -> runOnUiThread(() -> append(step)));
             finish(result.output);
@@ -71,11 +75,27 @@ public final class SingBoxVersionActivity extends AppCompatActivity {
                 }
                 new MaterialAlertDialogBuilder(this)
                         .setTitle(R.string.singbox_rollback)
-                        .setItems(items, (dialog, which) -> install(releases.get(which)))
+                        .setItems(items, (dialog, which) -> confirmThenInstall(releases.get(which)))
                         .setNegativeButton(R.string.cancel, null)
                         .show();
             });
         });
+    }
+
+    /** 选中的版本比本地旧就先问一句，避免手滑把能用的版本换掉。 */
+    private void confirmThenInstall(SingBoxController.Release release) {
+        String installed = SingBoxController.status().version;
+        if (SingBoxController.compareVersions(release.tag, installed) >= 0
+                || installed.contains("未") || installed.equals("—")) {
+            install(release);
+            return;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.singbox_downgrade_title)
+                .setMessage(getString(R.string.singbox_downgrade_confirm, installed, release.tag))
+                .setPositiveButton(R.string.singbox_rollback, (dialog, which) -> install(release))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 
     private void install(SingBoxController.Release release) {

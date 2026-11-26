@@ -239,6 +239,9 @@ public final class PanelFragment extends Fragment {
                         SingBoxController.latestForChannel(status.beta());
                 if (release == null) {
                     message = getString(R.string.singbox_no_release);
+                } else if (!SingBoxController.isNewerThanInstalled(release, status.version)) {
+                    // 本地已经是这个版本（或更新），别白下 24MB
+                    message = getString(R.string.singbox_already_latest, status.version);
                 } else {
                     RootShell.Result result = SingBoxController.install(context, release, step -> {
                         // 下载/安装进度直接喂到顶部那条进度条上，不打断网页。

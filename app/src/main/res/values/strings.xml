@@ -227,6 +227,9 @@
     <string name="tab_singbox">sing-box</string>
     <string name="singbox_segment_manage">管理</string>
     <string name="tab_web">面板</string>
+    <string name="singbox_already_latest">已是最新版本 %1$s，无需更新</string>
+    <string name="singbox_downgrade_confirm">本地是 %1$s，服务器上是 %2$s。继续会降级安装，确定吗？</string>
+    <string name="singbox_downgrade_title">降级安装</string>
     <string name="singbox_tab_control">控制</string>
     <string name="singbox_tab_version">版本</string>
     <string name="singbox_tab_config">设置</string>

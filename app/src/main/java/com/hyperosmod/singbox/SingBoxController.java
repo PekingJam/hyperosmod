@@ -45,6 +45,9 @@ public final class SingBoxController {
     private static final String LOG = WORK_DIR + "/sing-box.log";
     private static final String PID_FILE = WORK_DIR + "/sing-box.pid";
 
+    /** 自编内核清单（Android 系统 DNS 分支）。优先于 GitHub。 */
+    private static final String DL_MANIFEST = "https://dl.889969.xyz/singbox/latest.json";
+    /** 兜底：dl 挂掉时才回落到上游官方发布（官方包在 Android 上读不到系统 DNS）。 */
     private static final String REPO_API =
             "https://api.github.com/repos/sagernet/sing-box/releases?per_page=40";
 
@@ -171,27 +174,248 @@ public final class SingBoxController {
     // 版本
     // ==================================================================================
 
-    /** GitHub 上的一个发布。 */
+    /** 一个可用版本：可能来自 dl 自编清单，也可能来自 GitHub 官方发布。 */
     public static final class Release {
         public final String tag;
         public final boolean prerelease;
         public final String assetUrl;
         public final String assetName;
+        /** 为空表示来源不提供校验值（GitHub 旧接口）。 */
+        public final String sha256;
+        public final boolean selfBuilt;
 
-        Release(String tag, boolean prerelease, String assetUrl, String assetName) {
+        Release(String tag, boolean prerelease, String assetUrl, String assetName,
+                String sha256, boolean selfBuilt) {
             this.tag = tag;
             this.prerelease = prerelease;
             this.assetUrl = assetUrl;
             this.assetName = assetName;
+            this.sha256 = sha256 == null ? "" : sha256;
+            this.selfBuilt = selfBuilt;
         }
 
         public String display() {
+            if (selfBuilt && prerelease) {
+                return tag + "  [自编·测试版]";
+            }
+            if (selfBuilt) {
+                return tag + "  [自编]";
+            }
             return prerelease ? tag + "  [测试版]" : tag;
         }
     }
 
-    /** 拉取发布列表；应用自身能联网即可，不需要 root。 */
+    /** 拉取发布列表：先问 dl 自编清单，拿不到再回落 GitHub。不需要 root。 */
     public static List<Release> releases() {
+        List<Release> fromDl = dlReleases();
+        if (!fromDl.isEmpty()) {
+            return fromDl;
+        }
+        return githubReleases();
+    }
+
+    // ------------------------------------------------------------------------------
+    // 版本比较：只有服务器版本比本地新才值得更新
+    // ------------------------------------------------------------------------------
+
+    /**
+     * 比较两个版本号，语义同 semver：忽略开头的 v 和 +build 部分，先比数字三段，
+     * 相同再比预发布标记（无预发布 > alpha < beta < rc < 另一串）。
+     *
+     * @return 正数表示 {@code left} 更新，0 表示相同，负数表示更旧
+     */
+    public static int compareVersions(String left, String right) {
+        String a = normalizeVersion(left);
+        String b = normalizeVersion(right);
+        if (a.equals(b)) {
+            return 0;
+        }
+        // git describe 形态（1.14.4-132-g0f06352a5）表示「该 tag 之后又 132 个提交」，
+        // 比同名 tag 本身新，但语义上不属于预发布，先单独处理再按 semver 比。
+        String[] gitDesc = describeBase(a);
+        if (gitDesc != null && b.equals(gitDesc[0])) {
+            return 1;
+        }
+        String[] gitDescRight = describeBase(b);
+        if (gitDescRight != null && a.equals(gitDescRight[0])) {
+            return -1;
+        }
+        String[] aParts = a.split("-", 2);
+        String[] bParts = b.split("-", 2);
+        int core = compareCore(aParts[0], bParts[0]);
+        if (core != 0) {
+            return core;
+        }
+        String aPre = aParts.length > 1 ? aParts[1] : "";
+        String bPre = bParts.length > 1 ? bParts[1] : "";
+        if (aPre.isEmpty() || bPre.isEmpty()) {
+            // 正式版比任何预发布都新
+            return aPre.isEmpty() ? (bPre.isEmpty() ? 0 : 1) : -1;
+        }
+        return comparePre(aPre, bPre);
+    }
+
+    /** 命中 git describe 形态时返回 {基础版本, 提交数}，否则 null。 */
+    private static String[] describeBase(String version) {
+        java.util.regex.Matcher matcher =
+                java.util.regex.Pattern.compile("^(\\d+\\.\\d+\\.\\d+)-(\\d+)-g[0-9a-f]{7,}$")
+                        .matcher(version);
+        if (!matcher.matches()) {
+            return null;
+        }
+        return new String[]{matcher.group(1), matcher.group(2)};
+    }
+
+    private static String normalizeVersion(String version) {
+        if (version == null) {
+            return "0";
+        }
+        String value = version.trim();
+        if (value.startsWith("v") || value.startsWith("V")) {
+            value = value.substring(1);
+        }
+        int plus = value.indexOf('+');
+        if (plus >= 0) {
+            value = value.substring(0, plus);
+        }
+        return value.isEmpty() ? "0" : value;
+    }
+
+    private static int compareCore(String left, String right) {
+        String[] a = left.split("\\.");
+        String[] b = right.split("\\.");
+        int length = Math.max(a.length, b.length);
+        for (int i = 0; i < length; i++) {
+            int x = i < a.length ? parseIntSafe(a[i]) : 0;
+            int y = i < b.length ? parseIntSafe(b[i]) : 0;
+            if (x != y) {
+                return Integer.compare(x, y);
+            }
+        }
+        return 0;
+    }
+
+    /** alpha < beta < rc < 其它；同一级再比点分数字（alpha.13 > alpha.9）。 */
+    private static int comparePre(String left, String right) {
+        String[] a = left.split("\\.");
+        String[] b = right.split("\\.");
+        int length = Math.max(a.length, b.length);
+        for (int i = 0; i < length; i++) {
+            String x = i < a.length ? a[i] : "";
+            String y = i < b.length ? b[i] : "";
+            if (x.equals(y)) {
+                continue;
+            }
+            // 短的那一方视为更旧（alpha < alpha.1）
+            if (x.isEmpty() || y.isEmpty()) {
+                return x.isEmpty() ? -1 : 1;
+            }
+            boolean xNum = x.chars().allMatch(Character::isDigit);
+            boolean yNum = y.chars().allMatch(Character::isDigit);
+            if (xNum && yNum) {
+                return Integer.compare(parseIntSafe(x), parseIntSafe(y));
+            }
+            if (xNum != yNum) {
+                return xNum ? -1 : 1;
+            }
+            int rank = Integer.compare(preRank(x), preRank(y));
+            if (rank != 0) {
+                return rank;
+            }
+            return x.compareTo(y);
+        }
+        return 0;
+    }
+
+    private static int preRank(String token) {
+        String value = token.toLowerCase(Locale.ROOT);
+        if (value.startsWith("alpha")) {
+            return 0;
+        }
+        if (value.startsWith("beta")) {
+            return 1;
+        }
+        if (value.startsWith("rc")) {
+            return 2;
+        }
+        return 3;
+    }
+
+    private static int parseIntSafe(String value) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    /** 本地已装版本（可能是「未安装」「—」这种占位）；能装就算 0。 */
+    private static String installedVersionOrZero(String version) {
+        if (version == null || version.isEmpty() || version.contains("未") || version.equals("—")) {
+            return "0";
+        }
+        return version;
+    }
+
+    /** 服务器上的这个版本是否比本地新。 */
+    public static boolean isNewerThanInstalled(Release release, String installedVersion) {
+        if (release == null || release.tag == null || release.tag.isEmpty()) {
+            return false;
+        }
+        return compareVersions(release.tag, installedVersionOrZero(installedVersion)) > 0;
+    }
+
+    /** 读 dl.889969.xyz 的 singbox 清单，只取「内核」且是 tar.gz 的条目。 */
+    private static List<Release> dlReleases() {
+        List<Release> result = new ArrayList<>();
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(DL_MANIFEST).openConnection();
+            connection.setRequestProperty("Cache-Control", "no-cache");
+            connection.setConnectTimeout(8_000);
+            connection.setReadTimeout(15_000);
+            if (connection.getResponseCode() != 200) {
+                return result;
+            }
+            JSONObject manifest = new JSONObject(readAll(connection.getInputStream()));
+            JSONArray artifacts = manifest.optJSONArray("artifacts");
+            if (artifacts == null) {
+                return result;
+            }
+            for (int i = 0; i < artifacts.length(); i++) {
+                JSONObject artifact = artifacts.optJSONObject(i);
+                if (artifact == null) {
+                    continue;
+                }
+                String url = artifact.optString("url", "");
+                String name = url.isEmpty() ? "" : url.substring(url.lastIndexOf('/') + 1);
+                if (!name.endsWith(".tar.gz")) {
+                    continue;   // 面板之类的静态产物跳过，只认内核
+                }
+                String kind = artifact.optString("kind", "");
+                if (!kind.isEmpty() && !kind.contains("内核")) {
+                    continue;
+                }
+                String version = artifact.optString("version", manifest.optString("version", ""));
+                if (version.isEmpty()) {
+                    continue;
+                }
+                boolean beta = "beta".equalsIgnoreCase(artifact.optString("channel", ""));
+                result.add(new Release(version, beta, url, name,
+                        artifact.optString("sha256", ""), true));
+            }
+        } catch (Throwable ignored) {
+            // 网络异常当作没有清单，交给 GitHub 兜底
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        return result;
+    }
+
+    /** 拉取上游官方发布（兜底）。 */
+    private static List<Release> githubReleases() {
         List<Release> result = new ArrayList<>();
         HttpURLConnection connection = null;
         try {
@@ -231,7 +455,7 @@ public final class SingBoxController {
                         }
                     }
                 }
-                result.add(new Release(tag, release.optBoolean("prerelease"), url, name));
+                result.add(new Release(tag, release.optBoolean("prerelease"), url, name, "", false));
             }
         } catch (Throwable ignored) {
             // 网络异常返回已解析部分
@@ -243,10 +467,20 @@ public final class SingBoxController {
         return result;
     }
 
-    /** 当前通道的最新发布。 */
+    /**
+     * 当前通道的最新发布。自编清单目前只出一个通道，所有条目都算「可装」：
+     * 先找与所选通道一致的，找不到就退而取第一条（自编版本号带 md 后缀，
+     * status.beta() 会判成测试版，但清单里实际只有 stable，不能因此判定「没有更新」）。
+     */
     public static Release latestForChannel(boolean beta) {
-        for (Release release : releases()) {
+        List<Release> list = releases();
+        for (Release release : list) {
             if (release.prerelease == beta && !release.assetUrl.isEmpty()) {
+                return release;
+            }
+        }
+        for (Release release : list) {
+            if (!release.assetUrl.isEmpty()) {
                 return release;
             }
         }
@@ -264,6 +498,16 @@ public final class SingBoxController {
             downloaded = download(context, release.assetUrl, release.assetName);
         } catch (Throwable t) {
             return new RootShell.Result(1, "下载失败：" + t.getMessage());
+        }
+
+        if (!release.sha256.isEmpty()) {
+            progress.onStep("校验文件完整性…");
+            String actual = sha256Of(downloaded);
+            if (!release.sha256.equalsIgnoreCase(actual)) {
+                downloaded.delete();
+                return new RootShell.Result(1,
+                        "下载的文件校验不通过，已取消：\n期望 " + release.sha256 + "\n实际 " + actual);
+            }
         }
 
         RootShell.exec("mkdir -p " + WORK_DIR + "/tmp && rm -rf " + WORK_DIR + "/tmp/ex", 10);
@@ -476,6 +720,25 @@ public final class SingBoxController {
             throw new IllegalStateException("下载内容为空");
         }
         return target;
+    }
+
+    /** 算文件 SHA-256；出任何问题返回空串（调用方按不匹配处理）。 */
+    private static String sha256Of(File file) {
+        try (InputStream in = new BufferedInputStream(new java.io.FileInputStream(file))) {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                digest.update(buffer, 0, read);
+            }
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest.digest()) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     private static String readAll(InputStream input) throws Exception {
