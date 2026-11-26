@@ -51,6 +51,8 @@ public final class Keys {
     public static final String CUSTOM_THEME_COLOR = "custom_theme_color";
     /** SystemUI: show seconds in the status bar clock. */
     public static final String CLOCK_SECONDS = "status_bar_clock_seconds";
+    /** SystemUI: iOS-style status bar icons (dot signal / solid Wi-Fi / pill battery). */
+    public static final String IOS_STATUSBAR = "ios_statusbar";
 
     /** system_server: reject updates of the packages in {@link #BLOCKED_PACKAGES}. */
     public static final String BLOCK_UPDATES_ENABLED = "block_updates_enabled";

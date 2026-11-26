@@ -32,6 +32,11 @@ final class SystemUiHooks {
 
     void install() {
         try {
+            new IosStatusBarHook(xposed).install();
+        } catch (Throwable t) {
+            Logs.e("Failed to install iOS status-bar icons", t);
+        }
+        try {
             hookCanShowOnKeyguard();
         } catch (Throwable t) {
             Logs.e("Failed to hook lock-screen notification visibility", t);

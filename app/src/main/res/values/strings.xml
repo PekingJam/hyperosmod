@@ -63,6 +63,8 @@
 
 
     <string name="clock_seconds_title">状态栏时钟显示秒</string>
+    <string name="ios_icons_title">iOS 风格状态栏图标</string>
+    <string name="ios_icons_summary">信号换成圆点柱、WiFi 改实心扇形、电池改药丸并把百分比画在图标内；只换图标，不动布局</string>
     <string name="clock_seconds_summary">在状态栏时钟后追加秒数，按当前 12 / 24 小时制自动排版</string>
 
     <string name="block_updates_title">阻止应用更新</string>

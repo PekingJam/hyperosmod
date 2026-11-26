@@ -435,6 +435,8 @@ public final class MainActivity extends AppCompatActivity {
 
     /** 状态栏只剩「时钟显秒」。 */
     private void bindStatusBarRows() {
+        bindSwitch(binding.rowIosIcons, Keys.IOS_STATUSBAR,
+                R.string.ios_icons_title, R.string.ios_icons_summary);
         bindSwitch(binding.rowClockSeconds, Keys.CLOCK_SECONDS,
                 R.string.clock_seconds_title, R.string.clock_seconds_summary);
     }
@@ -500,6 +502,8 @@ public final class MainActivity extends AppCompatActivity {
     private void refreshAll() {
         binding.rowCustomTheme.switchView.setChecked(
                 Prefs.getBoolean(Keys.CUSTOM_THEME_ENABLED, false));
+        binding.rowIosIcons.switchView.setChecked(
+                Prefs.getBoolean(Keys.IOS_STATUSBAR, false));
         binding.rowClockSeconds.switchView.setChecked(
                 Prefs.getBoolean(Keys.CLOCK_SECONDS, false));
 

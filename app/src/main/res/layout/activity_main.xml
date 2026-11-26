@@ -327,6 +327,16 @@
                                 android:id="@+id/row_clock_seconds"
                                 layout="@layout/row_switch" />
 
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:layout_marginStart="18dp"
+                                android:background="?attr/colorOutlineVariant" />
+
+                            <include
+                                android:id="@+id/row_ios_icons"
+                                layout="@layout/row_switch" />
+
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
